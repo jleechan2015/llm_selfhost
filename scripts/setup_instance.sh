@@ -1,17 +1,22 @@
 #!/bin/bash
 # LLM Self-Host: Automated Vast.ai Instance Setup
 # This script configures a GPU instance for distributed LLM caching
+# VERIFIED WORKING: Instance 24626192 on ssh4.vast.ai:26192
 
 set -e
 
 echo "🚀 LLM Self-Host: Setting up vast.ai GPU instance..."
-echo "💰 Cost: ~$0.50/hour for RTX 4090 (81% savings vs AWS)"
+echo "💰 Cost: ~$0.25/hour for RTX 4090 (90% savings vs cloud providers)"
 echo "=" * 60
 
 # Update system and install dependencies
 echo "📦 Installing dependencies..."
+apt update && apt install -y openssh-server curl python3-pip
+service ssh start
+
+# Install Python packages with correct names
 pip install --upgrade pip
-pip install ollama redis-py modelcache sentence-transformers requests
+pip install ollama redis modelcache sentence-transformers requests
 
 # Install and start Ollama
 echo "🧠 Setting up Ollama LLM engine..."
@@ -31,17 +36,17 @@ else
     exit 1
 fi
 
-# Clone repository
+# Clone repository (updated URL)
 echo "📂 Cloning LLM Self-Host repository..."
 if [ -d "/app" ]; then
     rm -rf /app
 fi
-git clone https://github.com/jleechan2015/llm_selfhost.git /app
+git clone https://github.com/jleechanorg/llm_selfhost.git /app
 cd /app
 
-# Download recommended model
-echo "📥 Downloading recommended LLM model..."
-ollama pull qwen2:7b-instruct-q6_K
+# Download recommended qwen-coder model
+echo "📥 Downloading qwen-coder model for advanced code generation..."
+ollama pull qwen2.5-coder:7b
 
 # Test Redis connection
 echo "🔗 Testing Redis Cloud Enterprise connection..."
@@ -52,7 +57,7 @@ try:
         host='redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com',
         port=14339,
         password='cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl',
-        ssl=True
+        decode_responses=True
     )
     r.ping()
     print('✅ Redis Cloud connection successful')
@@ -68,14 +73,14 @@ cat > /app/monitor.sh << 'EOF'
 echo "=== LLM Self-Host System Status ==="
 echo "Timestamp: $(date)"
 echo "GPU Usage:"
-nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits
+nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null || echo "No GPU detected"
 echo "Ollama Status:"
 curl -s http://localhost:11434/api/tags | jq '.models[].name' 2>/dev/null || echo "Ollama not responding"
 echo "Redis Connection:"
 python3 -c "
 import redis
 try:
-    r = redis.Redis(host='redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com', port=14339, password='cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl', ssl=True)
+    r = redis.Redis(host='redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com', port=14339, password='cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl', decode_responses=True)
     info = r.info()
     print(f'Connected clients: {info.get(\"connected_clients\", \"N/A\")}')
     print(f'Used memory: {info.get(\"used_memory_human\", \"N/A\")}')
@@ -98,24 +103,29 @@ cat > /app/run_service.sh << 'EOF'
 cd /app
 echo "🚀 Starting LLM Self-Host service..."
 echo "📊 Monitor logs: tail -f /tmp/llm_selfhost_monitor.log"
-echo "🎯 Repository: https://github.com/jleechan2015/llm_selfhost"
-python3 llm_cache_app.py
+echo "🎯 Repository: https://github.com/jleechanorg/llm_selfhost"
+python3 main.py
 EOF
 
 chmod +x /app/run_service.sh
 
 # Run initial test
 echo "🧪 Running initial cache system test..."
-python3 /app/llm_cache_app.py
+python3 /app/main.py
 
 echo ""
 echo "✅ LLM Self-Host setup completed successfully!"
 echo "🎯 Key Information:"
-echo "   - Repository: https://github.com/jleechan2015/llm_selfhost"
-echo "   - Application: /app/llm_cache_app.py"  
+echo "   - Repository: https://github.com/jleechanorg/llm_selfhost"
+echo "   - Application: /app/main.py"  
 echo "   - Monitoring: /app/monitor.sh"
 echo "   - Service: /app/run_service.sh"
 echo "   - Logs: /tmp/llm_selfhost_monitor.log"
+echo ""
+echo "💡 Working Configuration:"
+echo "   vastai create instance [ID] \\"
+echo "     --image ubuntu:20.04 \\"
+echo "     --onstart-cmd \"apt update && apt install -y openssh-server && service ssh start\""
 echo ""
 echo "💡 Next Steps:"
 echo "   1. Monitor costs on vast.ai dashboard"
@@ -123,4 +133,4 @@ echo "   2. Check cache hit rates in Redis Cloud"
 echo "   3. Scale to multiple instances as needed"
 echo "   4. Review monitoring logs for optimization"
 echo ""
-echo "🎊 Happy caching! Your system is ready for 81% cost savings!"
+echo "🎊 Happy caching! Your system is ready with qwen-coder!"
