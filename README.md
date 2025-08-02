@@ -55,7 +55,7 @@ Instead of exact string matching, we use **semantic similarity** to cache respon
 
 ### Prerequisites
 - Credit card for vast.ai ($5 minimum deposit)
-- Redis Cloud Enterprise credentials (provided in examples)
+- Redis Cloud Enterprise credentials
 - Basic command line familiarity
 
 ### Quick Start (30 minutes)
@@ -71,7 +71,15 @@ pip install vastai
 vastai set api-key YOUR_API_KEY_HERE
 ```
 
-#### Step 2: Deploy GPU Instance (10 minutes)
+#### Step 2: Configure Redis Credentials
+```bash
+# Set up your Redis Cloud Enterprise credentials
+export REDIS_HOST="your-redis-host.redis-cloud.com"
+export REDIS_PORT="your-port"
+export REDIS_PASSWORD="your-password"
+```
+
+#### Step 3: Deploy GPU Instance (10 minutes)
 ```bash
 # Find available RTX 4090 instances
 vastai search offers 'gpu_name=RTX_4090 reliability>0.95'
@@ -82,13 +90,13 @@ vastai create instance OFFER_ID \
   --disk 50 \
   --ssh \
   --env "GIT_REPO=https://github.com/jleechanorg/llm_selfhost.git" \
-  --env "REDIS_HOST=redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com" \
-  --env "REDIS_PORT=14339" \
-  --env "REDIS_PASSWORD=cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl" \
-  --onstart /path/to/startup_llm.sh
+  --env "REDIS_HOST=$REDIS_HOST" \
+  --env "REDIS_PORT=$REDIS_PORT" \
+  --env "REDIS_PASSWORD=$REDIS_PASSWORD" \
+  --onstart scripts/setup_instance.sh
 ```
 
-#### Step 3: Test the System (10 minutes)
+#### Step 4: Test the System (10 minutes)
 ```bash
 # SSH into your instance
 vastai ssh INSTANCE_ID
@@ -97,7 +105,7 @@ vastai ssh INSTANCE_ID
 cd /app && python3 main.py
 ```
 
-#### Step 4: Verify Cache Performance (5 minutes)
+#### Step 5: Verify Cache Performance (5 minutes)
 ```bash
 # Test semantic similarity caching
 # Query 1: "What is artificial intelligence?"
@@ -105,7 +113,7 @@ cd /app && python3 main.py
 # Query 2 should hit cache (similar to Query 1)
 
 # Monitor Redis cache statistics
-redis-cli -u "redis://default:cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl@redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com:14339" info memory
+redis-cli -u "$REDIS_URL" info memory
 ```
 
 ### Production Deployment
@@ -119,9 +127,9 @@ for i in {1..3}; do
     --disk 50 \
     --ssh \
     --env "GIT_REPO=https://github.com/jleechanorg/llm_selfhost.git" \
-    --env "REDIS_HOST=redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com" \
-    --env "REDIS_PORT=14339" \
-    --env "REDIS_PASSWORD=cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl" \
+    --env "REDIS_HOST=$REDIS_HOST" \
+    --env "REDIS_PORT=$REDIS_PORT" \
+    --env "REDIS_PASSWORD=$REDIS_PASSWORD" \
     --env "INSTANCE_ID=worker-$i" \
     --onstart scripts/setup_instance.sh
 done
@@ -174,8 +182,8 @@ def call_llm_with_balancing(prompt):
                              │
       ┌─────────────────────────────────────────────────┐
       │              Rememberer                         │
-      │   Host: redis-14339.c13.us-east-1-3.ec2...     │
-      │   Port: 14339                                   │
+      │   Host: <REDIS_HOST>                            │
+      │   Port: <REDIS_PORT>                            │
       │   SSL/TLS Encrypted                             │
       │                                                 │
       │ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ │
@@ -217,8 +225,8 @@ FROM pytorch/pytorch:latest
 **Connection Details**:
 ```
 Protocol: Redis with SSL/TLS
-Host: redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com
-Port: 14339
+Host: <REDIS_HOST>
+Port: <REDIS_PORT>
 Authentication: Username/password
 Encryption: SSL/TLS in transit
 ```
@@ -280,9 +288,9 @@ cache.init(
     data_manager=CacheBase(
         name='redis',
         config={
-            'host': 'redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com',
-            'port': 14339,
-            'password': 'cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl',
+            'host': os.getenv('REDIS_HOST'),
+            'port': int(os.getenv('REDIS_PORT')),
+            'password': os.getenv('REDIS_PASSWORD'),
             'ssl': True,
             'db': 0
         }
@@ -405,11 +413,12 @@ vastai search offers 'country=US reliability>0.95'
 
 #### Redis Connection Failed
 ```bash
-# Test connection manually
-redis-cli -u "redis://default:cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl@redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com:14339" ping
+# Test connection manually (set REDIS_URL first)
+export REDIS_URL="redis://user:password@host:port"
+redis-cli -u "$REDIS_URL" ping
 
 # Check SSL requirements
-redis-cli --tls -u "rediss://default:password@host:port" ping
+redis-cli --tls -u "$REDIS_URL" ping
 ```
 
 #### Model Loading Slow
@@ -441,8 +450,8 @@ ssh -p PORT root@HOST 'ps aux | grep -E "(ollama|python)"'
 # Monitor GPU usage
 ssh -p PORT root@HOST 'nvidia-smi'
 
-# Check Redis stats
-redis-cli -u "redis://..." info stats
+# Check Redis stats (set REDIS_URL first)
+redis-cli -u "$REDIS_URL" info stats
 ```
 
 ### Performance Optimization
