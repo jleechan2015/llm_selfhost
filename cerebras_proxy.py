@@ -160,7 +160,7 @@ def convert_anthropic_to_openai(anthropic_request: Dict[str, Any]) -> Dict[str, 
     openai_request = {
         "model": DEFAULT_MODEL,  # Force our model instead of what Claude CLI requests
         "messages": openai_messages,
-        "max_tokens": anthropic_request.get("max_tokens", 1000),
+        "max_tokens": anthropic_request.get("max_tokens", 20000),
         "temperature": anthropic_request.get("temperature", 0.7),
         "stream": anthropic_request.get("stream", False)
     }
@@ -197,6 +197,125 @@ def convert_openai_to_anthropic(openai_response: Dict[str, Any]) -> Dict[str, An
     }
 
     return anthropic_response
+
+def convert_openai_streaming_chunk_to_anthropic(openai_chunk: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert OpenAI streaming chunk to Anthropic streaming format"""
+
+    choice = openai_chunk.get("choices", [{}])[0]
+    delta = choice.get("delta", {})
+    content = delta.get("content", "")
+
+    # Check if this is the final chunk
+    finish_reason = choice.get("finish_reason")
+
+    if finish_reason:
+        # Final chunk with stop reason
+        return {
+            "type": "message_stop",
+            "message": {
+                "id": openai_chunk.get("id", ""),
+                "type": "message",
+                "role": "assistant",
+                "content": [],
+                "model": openai_chunk.get("model", DEFAULT_MODEL),
+                "stop_reason": "end_turn" if finish_reason == "stop" else "max_tokens",
+                "stop_sequence": None,
+                "usage": {
+                    "input_tokens": 0,  # Not available in streaming
+                    "output_tokens": 0
+                }
+            }
+        }
+    elif content:
+        # Content chunk
+        return {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+                "type": "text_delta",
+                "text": content
+            }
+        }
+    else:
+        # Start chunk
+        return {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+                "type": "text",
+                "text": ""
+            }
+        }
+
+def parse_openai_streaming_response(response_text: str) -> Iterator[str]:
+    """Parse OpenAI Server-Sent Events format and convert to Anthropic format"""
+
+    # Start with message_start event
+    message_start = {
+        "type": "message_start",
+        "message": {
+            "id": "msg-streaming",
+            "type": "message",
+            "role": "assistant",
+            "content": [],
+            "model": DEFAULT_MODEL,
+            "stop_reason": None,
+            "stop_sequence": None,
+            "usage": {"input_tokens": 0, "output_tokens": 0}
+        }
+    }
+    yield f"event: message_start\ndata: {json.dumps(message_start)}\n\n"
+
+    # Send content_block_start
+    content_start = {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {"type": "text", "text": ""}
+    }
+    yield f"event: content_block_start\ndata: {json.dumps(content_start)}\n\n"
+
+    lines = response_text.strip().split('\n')
+    for line in lines:
+        line = line.strip()
+        if line.startswith("data: "):
+            json_part = line[6:]  # Remove "data: " prefix
+
+            if json_part == "[DONE]":
+                # Send message_stop
+                message_stop = {
+                    "type": "message_stop"
+                }
+                yield f"event: message_stop\ndata: {json.dumps(message_stop)}\n\n"
+                break
+
+            try:
+                openai_chunk = json.loads(json_part)
+                choice = openai_chunk.get("choices", [{}])[0]
+                delta = choice.get("delta", {})
+                content = delta.get("content", "")
+                finish_reason = choice.get("finish_reason")
+
+                if content:
+                    # Send content delta
+                    content_delta = {
+                        "type": "content_block_delta",
+                        "index": 0,
+                        "delta": {"type": "text_delta", "text": content}
+                    }
+                    yield f"event: content_block_delta\ndata: {json.dumps(content_delta)}\n\n"
+
+                if finish_reason:
+                    # Send content_block_stop then message_stop
+                    content_stop = {"type": "content_block_stop", "index": 0}
+                    yield f"event: content_block_stop\ndata: {json.dumps(content_stop)}\n\n"
+
+                    message_stop = {"type": "message_stop"}
+                    yield f"event: message_stop\ndata: {json.dumps(message_stop)}\n\n"
+                    break
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse streaming chunk: {e}, chunk: {json_part}")
+                continue
 
 @app.get("/")
 async def health_check():
@@ -356,13 +475,13 @@ async def create_message(request: Request):
                 openai_response = response.json()
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse Cerebras response as JSON: {e}")
-                logger.error(f"Raw response: {response.text}")
+                logger.error(f"Raw response: {response_text}")
                 error_response = {
                     "id": "error",
                     "type": "error",
                     "error": {
                         "type": "api_error",
-                        "message": f"Invalid JSON response from Cerebras: {response.text[:200]}"
+                        "message": f"Invalid JSON response from Cerebras: {response_text[:200]}"
                     }
                 }
                 return JSONResponse(content=error_response, status_code=500)
