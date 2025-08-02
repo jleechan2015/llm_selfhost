@@ -2,16 +2,37 @@
 
 Cost-effective LLM inference using vast.ai GPU instances with Redis Cloud Enterprise caching.
 
+## 🚀 NEW: Claude CLI Integration
+
+**Now supports direct Claude CLI integration via API proxy!**
+
+```bash
+# Use your self-hosted qwen model with Claude CLI
+./claude_start.sh --qwen
+
+# Automatically sets up:
+# - SSH tunnel to vast.ai
+# - API proxy with Redis caching  
+# - Environment variables for Claude CLI redirection
+```
+
+**Benefits**: Real Claude CLI experience + 90% cost savings + Redis caching
+
+📋 **Setup Guide**: [API_PROXY_GUIDE.md](API_PROXY_GUIDE.md)
+
+---
+
 ## Table of Contents
 
 1. [Goal](#goal)
 2. [Background](#background) 
 3. [Setup Instructions](#setup-instructions)
-4. [Detailed Architecture](#detailed-architecture)
-5. [Cost Analysis](#cost-analysis)
-6. [Performance Metrics](#performance-metrics)
-7. [Troubleshooting](#troubleshooting)
-8. [Support](#support)
+4. [Claude CLI Integration](#claude-cli-integration)
+5. [Detailed Architecture](#detailed-architecture)
+6. [Cost Analysis](#cost-analysis)
+7. [Performance Metrics](#performance-metrics)
+8. [Troubleshooting](#troubleshooting)
+9. [Support](#support)
 
 ## Goal
 
@@ -42,6 +63,7 @@ Reduce LLM inference costs by **81%** while maintaining response quality through
 - **Thinkers**: vast.ai GPU instances running Ollama LLM engines
 - **Rememberer**: Redis Cloud Enterprise for centralized cache storage
 - **Intelligence**: SentenceTransformers embeddings for semantic similarity matching
+- **Integration**: API proxy for Claude CLI compatibility
 
 ### Key Innovation
 Instead of exact string matching, we use **semantic similarity** to cache responses:
@@ -116,47 +138,52 @@ cd /app && python3 main.py
 redis-cli -u "$REDIS_URL" info memory
 ```
 
-### Production Deployment
+## Claude CLI Integration
 
-#### Multi-Instance Setup
+### Overview
+
+The API proxy enables seamless Claude CLI integration with your self-hosted infrastructure:
+
+```
+Claude CLI → ANTHROPIC_BASE_URL → SSH Tunnel → vast.ai API Proxy → Redis Cache → qwen2.5-coder:7b
+```
+
+### Setup
+
+1. **Deploy API Proxy** (on vast.ai instance):
 ```bash
-# Deploy 3 instances for redundancy
-for i in {1..3}; do
-  vastai create instance $(vastai search offers 'gpu_name=RTX_4090 reliability>0.95' --raw | head -1 | cut -d' ' -f1) \
-    --image pytorch/pytorch:latest \
-    --disk 50 \
-    --ssh \
-    --env "GIT_REPO=https://github.com/jleechanorg/llm_selfhost.git" \
-    --env "REDIS_HOST=$REDIS_HOST" \
-    --env "REDIS_PORT=$REDIS_PORT" \
-    --env "REDIS_PASSWORD=$REDIS_PASSWORD" \
-    --env "INSTANCE_ID=worker-$i" \
-    --onstart scripts/setup_instance.sh
-done
+cd llm_selfhost
+python3 simple_api_proxy.py
 ```
 
-#### Load Balancing
-```python
-# Simple round-robin load balancer
-import requests
-import itertools
+2. **Configure Claude CLI** (local machine):
+```bash
+# Set environment variables
+export ANTHROPIC_BASE_URL="http://localhost:8001"
+export ANTHROPIC_MODEL="qwen2.5-coder:7b"
 
-INSTANCES = [
-    "http://instance1:11434",
-    "http://instance2:11434", 
-    "http://instance3:11434"
-]
+# Create SSH tunnel
+ssh -N -L 8001:localhost:8000 root@ssh4.vast.ai -p 26192 &
 
-instance_cycle = itertools.cycle(INSTANCES)
-
-def call_llm_with_balancing(prompt):
-    instance = next(instance_cycle)
-    return requests.post(f"{instance}/api/generate", json={
-        "model": "qwen2:7b-instruct-q6_K",
-        "prompt": prompt,
-        "stream": False
-    }).json()
+# Use Claude CLI normally
+claude --model "qwen2.5-coder:7b" "Write a Python function"
 ```
+
+3. **Automated Integration** (recommended):
+```bash
+# Use the integrated claude_start.sh
+./claude_start.sh --qwen
+```
+
+### Features
+
+- **Anthropic API Compatible**: Drop-in replacement for Claude CLI
+- **Redis Caching**: Automatic response caching with 24-hour TTL
+- **SSH Tunneling**: Secure connection through vast.ai SSH ports
+- **Health Monitoring**: `/health` endpoint for system status
+- **Error Handling**: Graceful fallbacks and proper error messages
+
+📋 **Complete Guide**: [API_PROXY_GUIDE.md](API_PROXY_GUIDE.md)
 
 ## Detailed Architecture
 
@@ -171,8 +198,8 @@ def call_llm_with_balancing(prompt):
 │ │ LLM Engine  │ │    │ │ LLM Engine  │ │    │ │ LLM Engine  │ │
 │ └─────────────┘ │    │ └─────────────┘ │    │ └─────────────┘ │
 │ ┌─────────────┐ │    │ ┌─────────────┐ │    │ ┌─────────────┐ │
-│ │ ModelCache  │ │    │ │ ModelCache  │ │    │ │ ModelCache  │ │
-│ │   Client    │ │    │ │   Client    │ │    │ │   Client    │ │
+│ │ API Proxy   │ │    │ │ API Proxy   │ │    │ │ API Proxy   │ │
+│ │(Anthropic)  │ │    │ │(Anthropic)  │ │    │ │(Anthropic)  │ │
 │ └─────────────┘ │    │ └─────────────┘ │    │ └─────────────┘ │
 └─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
           │                      │                      │
@@ -187,8 +214,8 @@ def call_llm_with_balancing(prompt):
       │   SSL/TLS Encrypted                             │
       │                                                 │
       │ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ │
-      │ │  Embeddings │ │   Cached    │ │    TTL      │ │
-      │ │ (Semantic)  │ │ Responses   │ │ Management  │ │
+      │ │  Cache Keys │ │   Cached    │ │    TTL      │ │
+      │ │ (MD5 Hash)  │ │ Responses   │ │ Management  │ │
       │ └─────────────┘ └─────────────┘ └─────────────┘ │
       └─────────────────────────────────────────────────┘
 ```
@@ -210,16 +237,32 @@ FROM pytorch/pytorch:latest
 
 # Dependencies
 - ollama (LLM serving)
+- fastapi (API proxy)
 - redis-py (cache client)
-- modelcache (semantic caching)
-- sentence-transformers (embeddings)
+- uvicorn (ASGI server)
 - requests (HTTP client)
 ```
 
 **LLM Model Configuration**:
-- **Primary**: qwen2:7b-instruct-q6_K (balanced performance/quality)
-- **Alternative**: qwen2:1.5b (faster, lower quality)
-- **Enterprise**: qwen2:14b (highest quality, slower)
+- **Primary**: qwen2.5-coder:7b (specialized for code generation)
+- **Alternative**: qwen2:7b-instruct-q6_K (general purpose)
+- **Enterprise**: qwen2.5-coder:14b (highest quality, slower)
+
+#### API Proxy Layer
+**Anthropic Compatibility**:
+```python
+# Endpoints implemented
+GET  /                 # Health check
+GET  /v1/models        # List available models
+POST /v1/messages      # Create message completion
+GET  /health           # Detailed system status
+```
+
+**Cache Integration**:
+- **Cache Key**: MD5 hash of message content
+- **TTL**: 24 hours (configurable)
+- **Hit Detection**: Automatic logging and metrics
+- **Fallback**: Graceful degradation without Redis
 
 #### Rememberer (Redis Cloud Enterprise)
 **Connection Details**:
@@ -232,109 +275,36 @@ Encryption: SSL/TLS in transit
 ```
 
 **Cache Architecture**:
-- **Embedding Model**: all-MiniLM-L6-v2 (384-dimensional vectors)
-- **Similarity Threshold**: 0.8 (80% similarity for cache hits)
-- **TTL Strategy**: 24 hours for responses, 7 days for embeddings
+- **Key Format**: `anthropic_cache:{md5_hash}`
+- **TTL Strategy**: 24 hours for responses
 - **Eviction Policy**: LRU (Least Recently Used)
 - **Memory Limit**: 1GB with automatic scaling
 
 **Data Structures**:
 ```redis
-# Embedding storage
-cache:embedding:{prompt_hash} -> vector[384]
-
 # Response storage  
-cache:response:{prompt_hash} -> {
-  "response": "LLM generated text",
-  "model": "qwen2:7b-instruct-q6_K",
-  "timestamp": 1643723400,
-  "tokens": 150
-}
+anthropic_cache:abc123 -> "Generated response text..."
 
-# Metadata tracking
-cache:metadata:{prompt_hash} -> {
-  "hit_count": 5,
-  "created": 1643723400,
-  "last_accessed": 1643809800
-}
-```
-
-#### Integration Layer (ModelCache)
-**Semantic Similarity Pipeline**:
-```python
-# 1. Query Processing
-query = "What is machine learning?"
-embedding = sentence_transformer.encode(query)
-
-# 2. Cache Lookup
-similar_queries = redis.vector_search(embedding, threshold=0.8)
-
-# 3. Cache Hit/Miss Logic
-if similar_queries:
-    return cached_response  # Cache Hit ✅
-else:
-    response = ollama.generate(query)  # Cache Miss ❌
-    redis.store(embedding, response)
-    return response
-```
-
-**Configuration Options**:
-```python
-cache.init(
-    # Embedding configuration
-    embedding_func=SentenceTransformer('all-MiniLM-L6-v2'),
-    
-    # Redis configuration
-    data_manager=CacheBase(
-        name='redis',
-        config={
-            'host': os.getenv('REDIS_HOST'),
-            'port': int(os.getenv('REDIS_PORT')),
-            'password': os.getenv('REDIS_PASSWORD'),
-            'ssl': True,
-            'db': 0
-        }
-    ),
-    
-    # Cache behavior
-    similarity_threshold=0.8,
-    ttl=86400,  # 24 hours
-    max_size=1000000  # 1M entries
-)
+# Metadata (optional)
+cache_stats:hits -> 1250
+cache_stats:misses -> 350
+cache_stats:hit_ratio -> 0.78
 ```
 
 ### Data Flow
 
 #### Cache Hit Scenario (Fast Path)
 ```
-User Query → Embedding Generation → Vector Search → Cache Hit → Cached Response
-Time: ~50-100ms
+Claude CLI → API Proxy → Redis Lookup → Cache Hit → Cached Response
+Time: ~10-50ms
 Cost: ~$0.0001 per query
 ```
 
 #### Cache Miss Scenario (Slow Path)  
 ```
-User Query → Embedding Generation → Vector Search → Cache Miss → LLM Inference → Cache Storage → New Response
+Claude CLI → API Proxy → Redis Lookup → Cache Miss → Ollama → Cache Store → New Response
 Time: ~3-8 seconds
 Cost: ~$0.001-0.01 per query
-```
-
-#### Semantic Similarity Examples
-```python
-# High Similarity (Cache Hit)
-query1 = "What is artificial intelligence?"
-query2 = "Explain AI in simple terms"
-similarity = 0.87  # Cache Hit ✅
-
-# Medium Similarity (Cache Hit)
-query1 = "How do neural networks work?"
-query2 = "Explain deep learning basics"
-similarity = 0.82  # Cache Hit ✅
-
-# Low Similarity (Cache Miss)
-query1 = "What is machine learning?"
-query2 = "How do you bake a chocolate cake?"
-similarity = 0.15  # Cache Miss ❌
 ```
 
 ## Cost Analysis
@@ -381,9 +351,9 @@ Monthly ROI: 400-600% return on investment
 ## Performance Metrics
 
 ### Latency Benchmarks
-- **Cache Hit**: 50-100ms average response time
+- **Cache Hit**: 10-50ms average response time
 - **Cache Miss**: 3-8 seconds (model inference time)
-- **Embedding Generation**: 10-50ms
+- **API Proxy Overhead**: <5ms
 - **Redis Lookup**: 1-5ms over SSL
 
 ### Throughput Capacity
@@ -402,6 +372,32 @@ Monthly ROI: 400-600% return on investment
 
 ### Common Issues
 
+#### API Proxy Not Starting
+```bash
+# Check dependencies
+python3 -c "import fastapi, uvicorn, redis, requests"
+
+# Check logs
+tail -f simple_api_proxy.log
+
+# Manual start for debugging
+python3 simple_api_proxy.py
+```
+
+#### Claude CLI Not Connecting
+```bash
+# Verify environment variables
+echo $ANTHROPIC_BASE_URL
+
+# Test SSH tunnel
+curl http://localhost:8001/
+
+# Test API directly
+curl -X POST http://localhost:8001/v1/messages \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello"}]}'
+```
+
 #### Instance Won't Start
 ```bash
 # Check GPU availability
@@ -413,30 +409,12 @@ vastai search offers 'country=US reliability>0.95'
 
 #### Redis Connection Failed
 ```bash
-# Test connection manually (set REDIS_URL first)
-export REDIS_URL="redis://user:password@host:port"
-redis-cli -u "$REDIS_URL" ping
-
-# Check SSL requirements
-redis-cli --tls -u "$REDIS_URL" ping
-```
-
-#### Model Loading Slow
-```bash
-# Use smaller model for testing
-ollama pull qwen2:1.5b  # 900MB vs 4GB
-
-# Check download progress
-docker logs CONTAINER_ID
-```
-
-#### High Costs
-```bash
-# Enable interruptible instances (50% cost savings)
-vastai create instance OFFER_ID --interruptible
-
-# Set spending limits
-vastai set billing-limit 50  # $50/day maximum
+# Test connection manually
+python3 -c "
+import redis
+r = redis.Redis(host='host', port=port, password='pass', ssl=True)
+print(r.ping())
+"
 ```
 
 ### Debug Commands
@@ -444,44 +422,23 @@ vastai set billing-limit 50  # $50/day maximum
 # Monitor instance status
 vastai show instances
 
-# Check running processes
-ssh -p PORT root@HOST 'ps aux | grep -E "(ollama|python)"'
+# Check API proxy health
+curl http://localhost:8001/health
 
-# Monitor GPU usage
-ssh -p PORT root@HOST 'nvidia-smi'
-
-# Check Redis stats (set REDIS_URL first)
+# Monitor Redis stats
 redis-cli -u "$REDIS_URL" info stats
-```
 
-### Performance Optimization
-
-#### Cache Tuning
-```python
-# Adjust similarity threshold based on use case
-similarity_threshold=0.7  # More cache hits, potentially lower quality
-similarity_threshold=0.9  # Fewer cache hits, higher quality
-
-# Optimize embedding model
-# Faster: all-MiniLM-L6-v2 (384 dim)
-# Better: all-mpnet-base-v2 (768 dim)
-```
-
-#### Instance Optimization
-```bash
-# Choose optimal instance type
-RTX 4090: Best price/performance for most workloads
-H100: Better for large models (70B+)
-A100: Good balance for enterprise workloads
+# Check SSH tunnel
+ps aux | grep "ssh.*8001"
 ```
 
 ## Support
 
 ### Community Resources
 - **GitHub Issues**: [Report bugs and feature requests](https://github.com/jleechanorg/llm_selfhost/issues)
+- **API Proxy Guide**: [Complete integration documentation](API_PROXY_GUIDE.md)
 - **vast.ai Discord**: Most responsive support for instance issues
 - **Redis Cloud Support**: Enterprise support included with subscription
-- **Documentation**: Comprehensive guides in `docs/` directory
 
 ### Professional Support
 - **Implementation Consulting**: Custom deployment assistance
@@ -503,7 +460,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 **Maintainer**: WorldArchitect.AI Team  
 
 **Quick Links**:
+- [🚀 Claude CLI Integration Guide](API_PROXY_GUIDE.md)
 - [30-Minute Setup Guide](docs/setup.md)
 - [Architecture Deep Dive](docs/architecture.md)
 - [Cost Calculator](docs/cost-analysis.md)
-- [Performance Benchmarks](docs/benchmarks.md)
