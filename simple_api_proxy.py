@@ -13,7 +13,7 @@ import json
 import time
 import hashlib
 import traceback
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
 
 # Core dependencies only
@@ -76,6 +76,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def extract_text_content(content: Union[str, List[Dict]]) -> str:
+    """Extract text from content (handles both string and list formats)"""
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        # Handle Anthropic API format: [{"type": "text", "text": "content"}]
+        text_parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get('type') == 'text':
+                text_parts.append(item.get('text', ''))
+            elif isinstance(item, str):
+                text_parts.append(item)
+        return ' '.join(text_parts)
+    else:
+        return str(content)
+
 def get_cache_key(messages: List[Dict]) -> str:
     """Generate cache key from messages"""
     # Convert messages to consistent string and hash
@@ -115,7 +131,7 @@ def call_ollama(model: str, messages: List[Dict]) -> str:
     prompt_parts = []
     for msg in messages:
         role = msg.get('role', 'user')
-        content = msg.get('content', '')
+        content = extract_text_content(msg.get('content', ''))
         if role == 'system':
             prompt_parts.append(f"System: {content}")
         elif role == 'user':
@@ -225,6 +241,14 @@ async def create_message(request: Request):
             response_content = call_ollama(model, messages)
             cache_response(cache_key, response_content)
         
+        # Calculate token counts properly
+        input_tokens = 0
+        for msg in messages:
+            content = extract_text_content(msg.get('content', ''))
+            input_tokens += len(content.split())
+        
+        output_tokens = len(response_content.split())
+        
         # Return Anthropic-compatible response
         anthropic_response = {
             "id": f"msg_{int(time.time())}",
@@ -235,8 +259,8 @@ async def create_message(request: Request):
             "stop_reason": "end_turn",
             "stop_sequence": None,
             "usage": {
-                "input_tokens": sum(len(msg.get('content', '').split()) for msg in messages),
-                "output_tokens": len(response_content.split())
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens
             }
         }
         
