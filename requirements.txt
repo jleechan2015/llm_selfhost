@@ -1,0 +1,5 @@
+ollama
+redis
+modelcache
+sentence-transformers
+requests
