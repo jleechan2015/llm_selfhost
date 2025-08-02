@@ -3,3 +3,5 @@ redis
 modelcache
 sentence-transformers
 requests
+fastapi
+uvicorn[standard]
