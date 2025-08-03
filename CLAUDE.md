@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run LLM cache tests**: `python3 llm_cache_app.py`
 - **Automated setup**: `./install.sh` (full system installation)
 - **Quick startup**: `./startup_llm.sh` (for vast.ai environments)
+- **RunPod deployment**: `./runpod_startup.sh` (for RunPod environments)
 
 ### Testing and Health Checks
 - **Health check**: `curl http://localhost:8000/health`
@@ -45,7 +46,8 @@ This is a **distributed LLM caching system** that provides cost-effective LLM in
    - 70-90% typical cache hit ratio
 
 4. **Infrastructure**:
-   - Designed for vast.ai GPU instances (RTX 4090/H100)
+   - Designed for GPU cloud instances (vast.ai, RunPod)
+   - RTX 4090/H100 support with persistent storage
    - SSH tunnel support for remote access
    - Health monitoring and graceful fallbacks
 
@@ -63,6 +65,7 @@ Claude CLI → API Proxy → Redis Cache Check → [Cache Hit: Return | Cache Mi
 - `llm_cache_app.py`: Standalone cache testing app
 - `install.sh`: Comprehensive installation script
 - `startup_llm.sh`: Vast.ai deployment script
+- `runpod_startup.sh`: RunPod deployment script with robust PATH handling
 
 ### Environment Variables
 
@@ -90,7 +93,8 @@ export ANTHROPIC_MODEL="qwen3-coder"
 
 ### Cost Model
 
-- **Vast.ai RTX 4090**: ~$0.50/hour
+- **Vast.ai RTX 4090**: ~$0.50/hour (marketplace pricing)
+- **RunPod RTX 4090**: ~$0.50-0.70/hour (more reliable)
 - **Cache hits**: ~$0.0001 per query  
 - **Cache misses**: ~$0.001-0.01 per query
 - **Target savings**: 81% vs cloud providers
@@ -99,6 +103,7 @@ export ANTHROPIC_MODEL="qwen3-coder"
 
 1. **Local Development**: Run `python3 simple_api_proxy.py`
 2. **Vast.ai Remote**: Use `startup_llm.sh` for automated deployment
-3. **Production**: Use `install.sh` for full system setup with monitoring
+3. **RunPod Remote**: Use `runpod_startup.sh` for reliable deployment with persistent storage
+4. **Production**: Use `install.sh` for full system setup with monitoring
 
 The system gracefully handles missing Redis credentials and can operate without caching for development.

@@ -9,7 +9,9 @@ This system allows Claude CLI to use your self-hosted qwen3-coder model by redir
 ## Architecture
 
 ```
-Claude CLI → ANTHROPIC_BASE_URL → SSH Tunnel → vast.ai API Proxy → Redis Cache → qwen3-coder
+Claude CLI → ANTHROPIC_BASE_URL → SSH Tunnel → GPU Cloud API Proxy → Redis Cache → qwen3-coder
+                                              ↗ vast.ai (marketplace)
+                                              ↘ RunPod (reliable)
 ```
 
 ## Quick Start
@@ -65,7 +67,50 @@ export REDIS_PASSWORD="your-password"
 python3 simple_api_proxy.py
 ```
 
-### 3. Configure Claude CLI Integration
+### 3. RunPod Deployment (Recommended for Reliability)
+
+RunPod offers more reliable infrastructure with persistent storage. Use the robust startup script to avoid common PATH issues:
+
+```bash
+# Deploy using RunPod PyTorch template
+# Use this startup command to avoid PATH issues:
+
+#!/bin/bash
+set -e
+set -x
+
+echo "--- RunPod LLM Proxy Startup Script ---"
+
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+ollama serve &
+sleep 5
+
+# Configure persistent storage
+if [ ! -L /root/.ollama ]; then
+  mv /root/.ollama /datastore/ollama
+  ln -s /datastore/ollama /root/.ollama
+fi
+
+# Install LiteLLM with PATH handling
+pip install litellm
+export PATH="$PATH:/root/.local/bin"
+
+# Pull model and start proxy
+ollama pull qwen3-coder:30b
+/root/.local/bin/litellm --model ollama/qwen3-coder:30b --host 0.0.0.0 --port 8000
+```
+
+**RunPod Advantages**:
+- ✅ Higher uptime than marketplace solutions
+- ✅ Persistent storage (models survive restarts) 
+- ✅ More predictable pricing
+- ✅ Better network reliability for downloads
+- ✅ Resolves common PATH issues with robust startup script
+
+See `docs/runpod-deployment.md` for complete deployment guide.
+
+### 4. Configure Claude CLI Integration
 
 Add to your `claude_start.sh` or equivalent:
 
