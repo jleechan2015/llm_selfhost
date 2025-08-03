@@ -1,0 +1,203 @@
+#!/bin/bash
+# Claude CLI with RunPod Integration
+# Usage: ./claude-runpod [claude options]
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Parse command line arguments for --pod
+RUNPOD_OVERRIDE=""
+CLAUDE_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --pod)
+            RUNPOD_OVERRIDE="$2"
+            shift 2
+            ;;
+        --help|-h)
+            # Will be handled later
+            CLAUDE_ARGS+=("$1")
+            shift
+            ;;
+        *)
+            CLAUDE_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Configuration - use --pod override if provided
+DEFAULT_RUNPOD_ENDPOINT="${RUNPOD_OVERRIDE:-${RUNPOD_ENDPOINT:-}}"
+DEFAULT_MODEL="${ANTHROPIC_MODEL:-qwen3-coder:30b}"
+
+echo -e "${BLUE}🚀 Claude CLI - RunPod Mode${NC}"
+echo "=============================="
+
+# Check if RunPod endpoint is configured
+check_config() {
+    if [ -z "$DEFAULT_RUNPOD_ENDPOINT" ]; then
+        echo -e "${RED}❌ RunPod endpoint not configured${NC}"
+        echo -e "${YELLOW}💡 Set RUNPOD_ENDPOINT environment variable:${NC}"
+        echo "   export RUNPOD_ENDPOINT=\"your-pod-id.proxy.runpod.net\""
+        echo "   Or pass it directly: RUNPOD_ENDPOINT=\"...\" ./claude-runpod"
+        return 1
+    else
+        echo -e "${GREEN}✅ RunPod endpoint: ${DEFAULT_RUNPOD_ENDPOINT}${NC}"
+        return 0
+    fi
+}
+
+# Check RunPod proxy health
+check_proxy() {
+    echo -e "${BLUE}🔍 Checking RunPod proxy health...${NC}"
+    
+    RUNPOD_URL="https://${DEFAULT_RUNPOD_ENDPOINT}"
+    HEALTH=$(curl -s --max-time 10 "${RUNPOD_URL}/health" 2>/dev/null)
+    
+    if echo "$HEALTH" | grep -q "healthy\|ok\|status.*ok"; then
+        echo -e "${GREEN}✅ RunPod proxy healthy${NC}"
+        
+        # Try to get backend info
+        BACKEND_INFO=$(echo "$HEALTH" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    components = data.get('components', {})
+    if 'ollama' in components:
+        print(f\"Ollama: {components['ollama']}\")
+    elif 'litellm' in components:
+        print(f\"LiteLLM: {components['litellm']}\")
+    else:
+        print('Backend: active')
+except:
+    print('Backend: responding')
+" 2>/dev/null || echo "Backend: responding")
+        
+        echo "  $BACKEND_INFO"
+        return 0
+    else
+        echo -e "${RED}❌ RunPod proxy unhealthy or unreachable${NC}"
+        echo "Response: $HEALTH"
+        echo -e "${YELLOW}💡 Check if your RunPod instance is running and accessible${NC}"
+        return 1
+    fi
+}
+
+# Test model availability
+test_models() {
+    echo -e "${BLUE}🔍 Testing model availability...${NC}"
+    
+    RUNPOD_URL="https://${DEFAULT_RUNPOD_ENDPOINT}"
+    MODELS=$(curl -s --max-time 10 "${RUNPOD_URL}/v1/models" 2>/dev/null)
+    
+    if echo "$MODELS" | grep -q "qwen"; then
+        echo -e "${GREEN}✅ Qwen models available${NC}"
+        
+        # Show available models
+        echo "Available models:"
+        echo "$MODELS" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    models = data.get('data', [])
+    for model in models:
+        model_id = model.get('id', 'unknown')
+        print(f\"  - {model_id}\")
+except:
+    print('  - Model list parsing failed')
+" 2>/dev/null || echo "  - Models available but list parsing failed"
+        
+        return 0
+    else
+        echo -e "${YELLOW}⚠️  Could not verify model availability${NC}"
+        echo "Response: $MODELS"
+        return 1
+    fi
+}
+
+# Main function
+main() {
+    # Check configuration
+    if ! check_config; then
+        exit 1
+    fi
+    
+    # Check proxy health
+    if ! check_proxy; then
+        echo -e "${RED}❌ RunPod proxy not responding properly${NC}"
+        echo -e "${YELLOW}💡 Troubleshooting steps:${NC}"
+        echo "   1. Verify your RunPod instance is running"
+        echo "   2. Check if LiteLLM proxy is running on port 8000"
+        echo "   3. Ensure the startup script completed successfully"
+        exit 1
+    fi
+    
+    # Test models (non-blocking)
+    test_models
+    
+    echo ""
+    echo -e "${GREEN}🎯 Ready to use Claude with RunPod!${NC}"
+    echo -e "${BLUE}📡 Using: https://${DEFAULT_RUNPOD_ENDPOINT}${NC}"
+    echo -e "${BLUE}🤖 Model: ${DEFAULT_MODEL}${NC}"
+    echo ""
+    
+    # Set environment and run Claude
+    export ANTHROPIC_BASE_URL="https://${DEFAULT_RUNPOD_ENDPOINT}"
+    export ANTHROPIC_MODEL="${DEFAULT_MODEL}"
+    
+    # Pass all arguments to claude
+    if [ ${#CLAUDE_ARGS[@]} -eq 0 ]; then
+        echo -e "${BLUE}🤖 Starting Claude in interactive mode...${NC}"
+        echo -e "${YELLOW}⏱️  Note: First response may take 30-60 seconds for model warmup${NC}"
+        echo ""
+        claude --dangerously-skip-permissions --continue
+    else
+        echo -e "${BLUE}🤖 Running Claude with arguments: ${CLAUDE_ARGS[*]}${NC}"
+        echo ""
+        claude --dangerously-skip-permissions --continue "${CLAUDE_ARGS[@]}"
+    fi
+}
+
+# Help message - check if help was requested
+for arg in "${CLAUDE_ARGS[@]}"; do
+    if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
+        echo "Claude CLI with RunPod Integration"
+        echo ""
+        echo "Usage:"
+        echo "  ./claude-runpod                                    # Interactive mode"
+        echo "  ./claude-runpod --pod your-pod.proxy.runpod.net   # Interactive with specific pod"
+        echo "  ./claude-runpod -p \"prompt\"                        # Headless mode"
+        echo "  ./claude-runpod --pod ENDPOINT --verbose -p \"...\" # Verbose headless with pod"
+        echo "  ./claude-runpod --help                             # Show this help"
+        echo ""
+        echo "Options:"
+        echo "  --pod ENDPOINT    Override RunPod endpoint (e.g., abc123.proxy.runpod.net)"
+        echo ""
+        echo "Configuration (environment variables):"
+        echo "  RUNPOD_ENDPOINT=your-pod.proxy.runpod.net # Required (unless --pod used)"
+        echo "  ANTHROPIC_MODEL=qwen3-coder:30b           # Optional (default)"
+        echo ""
+        echo "Examples:"
+        echo "  # Using environment variable"
+        echo "  export RUNPOD_ENDPOINT=\"9nahfrqit0znhh-11434.proxy.runpod.net\""
+        echo "  ./claude-runpod"
+        echo ""
+        echo "  # Using --pod parameter"
+        echo "  ./claude-runpod --pod \"9nahfrqit0znhh-11434.proxy.runpod.net\""
+        echo ""
+        echo "Requirements:"
+        echo "  - RunPod GPU instance with persistent storage"
+        echo "  - LiteLLM proxy running on port 8000"
+        echo "  - Ollama with qwen3-coder:30b model"
+        echo "  - runpod_startup.sh successfully executed"
+        exit 0
+    fi
+done
+
+# Run main function
+main
