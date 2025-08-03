@@ -196,7 +196,7 @@ async def list_models():
             return {
                 "object": "list",
                 "data": [{
-                    "id": "qwen2.5-coder:7b",
+                    "id": "qwen3-coder",
                     "object": "model", 
                     "created": int(time.time()),
                     "owned_by": "anthropic",
@@ -207,7 +207,7 @@ async def list_models():
         return {
             "object": "list",
             "data": [{
-                "id": "qwen2.5-coder:7b",
+                "id": "qwen3-coder",
                 "object": "model",
                 "created": int(time.time()),
                 "owned_by": "anthropic", 
@@ -221,7 +221,7 @@ async def create_message(request: Request):
     try:
         body = await request.json()
         
-        model = body.get('model', 'qwen2.5-coder:7b')
+        model = body.get('model', 'qwen3-coder')
         messages = body.get('messages', [])
         max_tokens = body.get('max_tokens', 1000)
         
