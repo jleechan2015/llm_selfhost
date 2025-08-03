@@ -18,7 +18,16 @@ echo "=== Step 1: RunPod Endpoint Configuration ===" | tee -a "$TEST_LOG"
 
 if [ -n "$RUNPOD_ENDPOINT" ]; then
     echo "✓ RunPod endpoint provided: $RUNPOD_ENDPOINT" | tee -a "$TEST_LOG"
-    API_BASE_URL="https://$RUNPOD_ENDPOINT"
+    # Check if endpoint already has protocol
+    if [[ "$RUNPOD_ENDPOINT" =~ ^https?:// ]]; then
+        API_BASE_URL="$RUNPOD_ENDPOINT"
+    elif [[ "$RUNPOD_ENDPOINT" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
+        # Direct IP:port format, use http
+        API_BASE_URL="http://$RUNPOD_ENDPOINT"
+    else
+        # Assume RunPod proxy format, use https
+        API_BASE_URL="https://$RUNPOD_ENDPOINT"
+    fi
     PROXY_TYPE="runpod"
 elif curl -s http://localhost:8000/health > /dev/null 2>&1; then
     echo "✓ Local API proxy detected" | tee -a "$TEST_LOG"
@@ -36,7 +45,7 @@ fi
 echo "=== Step 2: Configure Claude CLI ===" | tee -a "$TEST_LOG"
 
 export ANTHROPIC_BASE_URL="$API_BASE_URL"
-export ANTHROPIC_MODEL="qwen2.5-coder:7b"
+export ANTHROPIC_MODEL="qwen3-coder:30b"
 
 echo "Environment configured:" | tee -a "$TEST_LOG"
 echo "  ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL" | tee -a "$TEST_LOG"
