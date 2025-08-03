@@ -142,6 +142,7 @@ def call_ollama(model: str, messages: List[Dict]) -> str:
     prompt = "\n".join(prompt_parts)
     
     try:
+        print(f"🐛 DEBUG: Calling Ollama with model='{model}', prompt='{prompt[:100]}...'")
         response = requests.post(
             f"http://{OLLAMA_HOST}/api/generate",
             json={
@@ -151,6 +152,7 @@ def call_ollama(model: str, messages: List[Dict]) -> str:
             },
             timeout=30
         )
+        print(f"🐛 DEBUG: Ollama response status: {response.status_code}")
         
         if response.status_code == 200:
             result = response.json()
@@ -229,6 +231,7 @@ async def create_message(request: Request):
             raise HTTPException(status_code=400, detail="Messages are required")
         
         print(f"📨 Request: model={model}, messages={len(messages)}")
+        print(f"🐛 DEBUG: Using model: '{model}'")
         
         # Check cache first
         cache_key = get_cache_key(messages)
