@@ -223,7 +223,7 @@ async def create_message(request: Request):
     try:
         body = await request.json()
         
-        model = body.get('model', 'qwen3-coder:latest')
+        model = body.get('model', 'qwen3-coder')
         messages = body.get('messages', [])
         max_tokens = body.get('max_tokens', 1000)
         
