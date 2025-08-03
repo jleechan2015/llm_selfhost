@@ -1,0 +1,57 @@
+{
+  "name": "@jleechan/llm-proxy-server",
+  "version": "1.0.0",
+  "description": "Multi-LLM proxy server for Claude CLI with configurable backends",
+  "main": "src/index.js",
+  "bin": {
+    "llm-proxy": "./bin/llm-proxy.js"
+  },
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "lint": "eslint src/ tests/",
+    "format": "prettier --write src/ tests/"
+  },
+  "keywords": [
+    "llm",
+    "proxy",
+    "claude",
+    "anthropic",
+    "cerebras",
+    "qwen",
+    "vast.ai",
+    "runpod"
+  ],
+  "author": "jleechan",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.0.0",
+    "fastify": "^4.24.0",
+    "axios": "^1.6.0",
+    "chalk": "^4.1.2",
+    "fs-extra": "^11.1.0",
+    "find-free-port": "^2.0.0",
+    "yaml": "^2.3.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.0",
+    "eslint": "^8.50.0",
+    "prettier": "^3.0.0",
+    "supertest": "^6.3.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/index.js"
+    ]
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
