@@ -33,9 +33,9 @@ This project creates a standalone proxy service installable via npm that provide
 
 ### **Secondary Goals**
 
-* **Resilience:** Create a system that can failover to an alternative backend if the primary provider is down.
+* **Explicit Failure Handling:** Notify the developer immediately when a backend fails and recommend alternative backends, rather than silent failover.
 * **Developer Experience:** Establish a modular architecture that allows new LLM providers to be added with minimal code changes.
-* **Portability:** Enable consistent LLM backend configuration across multiple repositories and development environments.
+* **Workspace Isolation:** Enable per-project configuration while maintaining global installation convenience.
 
 ## **User Stories**
 
@@ -54,39 +54,49 @@ This project creates a standalone proxy service installable via npm that provide
      * \[ \] The proxy accepts a configuration pointing to a self-hosted RunPod URL
      * \[ \] Claude CLI commands successfully route to the RunPod endpoint
      * \[ \] The RunPod instance can be stopped and restarted without needing to re-download the LLM
-4. **As a developer working across multiple repositories**, I want to install the proxy once globally and use it in any project, so that I can maintain consistent LLM backend configuration across all my codebases.
+4. **As a solo developer working across multiple repositories**, I want to install the proxy once globally but have per-project configurations, so that different projects can use different backends without conflicts.
    * **Acceptance Criteria:**
      * \[ \] Global installation works: `npm install -g @jleechan/llm-proxy-server`
-     * \[ \] Any repository can use `export ANTHROPIC_BASE_URL=http://localhost:8000`
-     * \[ \] Configuration is portable across projects via config files
+     * \[ \] Each repository can have its own `.llmrc.json` configuration
+     * \[ \] Proxy auto-detects and uses project-specific config when started from that directory
+5. **As a solo developer**, I want to be explicitly notified when a backend fails and get recommendations for alternatives, rather than silent failover that could mask issues.
+   * **Acceptance Criteria:**
+     * \[ \] Clear error messages when backends fail with specific failure reasons
+     * \[ \] Recommendations for alternative backends based on current configuration
+     * \[ \] Option to quickly switch backends via CLI command
 
 ## **Feature Requirements**
 
 ### **Functional Requirements**
 
 1. **NPM Distribution:** The proxy must be installable via `npm install -g @jleechan/llm-proxy-server` and provide a CLI interface.
-2. **Configurable Backend:** The proxy must support configuration methods (environment variables, config files) to specify the active LLM backend.
-3. **Request Routing:** The proxy server must intercept Claude CLI API requests and route them to the appropriate provider's endpoint.
-4. **Authentication Handling:** The system must manage different authentication schemes (API keys for Cerebras, dummy keys for self-hosted proxies).
-5. **Provider Support:** The initial implementation must support three providers: Cerebras (SaaS), Vast.ai (self-hosted), and RunPod (self-hosted).
-6. **Multi-Repository Support:** The proxy must work with any repository using Claude CLI by setting `ANTHROPIC_BASE_URL`.
+2. **Workspace-Based Configuration:** The proxy must support per-project `.llmrc.json` files with fallback to global `~/.llm-proxy/config.json`.
+3. **Dynamic Port Management:** The proxy must auto-select available ports to avoid conflicts, with configurable port ranges.
+4. **Request Routing:** The proxy server must intercept Claude CLI API requests and route them to the appropriate provider's endpoint.
+5. **Explicit Error Handling:** When backends fail, provide clear error messages with specific failure reasons and recommend alternative backends.
+6. **Authentication Handling:** The system must securely manage different authentication schemes (API keys for Cerebras, dummy keys for self-hosted proxies).
+7. **Provider Support:** The initial implementation must support three providers: Cerebras (SaaS), Vast.ai (self-hosted), and RunPod (self-hosted).
+8. **Multi-Repository Support:** The proxy must work with any repository using Claude CLI by setting `ANTHROPIC_BASE_URL`.
 
 ### **Non-Functional Requirements**
 
-1. **Performance:** The overhead introduced by the routing logic should be negligible (\<50ms). End-to-end latency for self-hosted options should be under 3 seconds for a p95 response time.
-2. **Security:** All secrets (API keys) must be handled securely and never logged or exposed in error messages.
-3. **Usability:** Switching between backends should be achievable by changing a single configuration variable.
+1. **Performance:** The overhead introduced by the routing logic should be negligible (<50ms). End-to-end latency for self-hosted options should be under 3 seconds for a p95 response time.
+2. **Security:** All secrets (API keys) must be stored with restricted file permissions (600) and never logged or exposed in error messages.
+3. **Usability:** Switching between backends should be achievable by changing a single configuration variable or using `llm-proxy switch <backend>`.
+4. **Reliability:** The proxy must be robust enough for solo developer daily use with clear error reporting and recovery guidance.
 
 ## **UI/UX Requirements**
 
 This is a backend proxy service with a CLI interface for management. The proxy provides these command-line interactions:
 
 - **Installation**: `npm install -g @jleechan/llm-proxy-server`
-- **Startup**: `llm-proxy start [--config path/to/config.json]`
-- **Configuration**: `llm-proxy setup` (generates config templates)
+- **Startup**: `llm-proxy start [--port auto] [--workspace .]`
+- **Configuration**: `llm-proxy setup [--workspace .]` (generates config templates)
 - **Status**: `llm-proxy status` (shows running backends and health)
+- **Backend Switching**: `llm-proxy switch <backend>` (quick backend change)
+- **Error Recovery**: `llm-proxy recommend` (suggests alternative backends when current fails)
 
-The user experience is defined by simple installation, intuitive configuration, and seamless integration with existing Claude CLI workflows.
+The user experience is defined by simple installation, workspace-aware configuration, explicit error handling, and seamless integration with existing Claude CLI workflows.
 
 ## **Success Criteria**
 
@@ -121,19 +131,24 @@ The user experience is defined by simple installation, intuitive configuration, 
   - `llm-proxy stop` (gracefully shutdown)
 
 ### **Configuration Management**
-- **Global Config**: `~/.llm-proxy/config.json` (user-wide defaults)
-- **Project Config**: `.llmrc.json` or `llm.config.js` (repository-specific)
+- **Global Config**: `~/.llm-proxy/config.json` (user-wide defaults, 600 permissions)
+- **Project Config**: `.llmrc.json` (repository-specific, overrides global)
 - **Environment Variables**: `LLM_BACKEND_CONFIG`, `LLM_PROXY_PORT`
+- **Config Precedence**: Project `.llmrc.json` > Environment Variables > Global config
 
 ### **Integration Pattern**
 ```bash
 # One-time setup
 npm install -g @jleechan/llm-proxy-server
-llm-proxy setup
+llm-proxy setup --workspace .
 
-# Per-repository usage
-export ANTHROPIC_BASE_URL="http://localhost:8000"
+# Per-repository usage (auto-detects .llmrc.json)
+llm-proxy start --workspace .
+export ANTHROPIC_BASE_URL="http://localhost:8001"  # Auto-selected port
 claude "Write a Python function"  # Routes through proxy
+
+# Quick backend switching
+llm-proxy switch cerebras  # When claude rate limits
 ```
 
 ### **Multi-Repository Support**
@@ -255,7 +270,123 @@ The caching mechanism for self-hosted solutions will be managed by Redis Enterpr
 * **Agent 6 (CLI Commands):** Implements `llm-proxy start/stop/status/setup` commands with proper process management.
 * **Agent 7 (Testing):** Creates unit tests for strategies and integration tests against live endpoints, plus npm install/uninstall tests.
 
-**Total Estimated Time: 60 minutes**
+**Total Estimated Time: 90 minutes**
+
+## **Test-Driven Development Implementation Plan**
+
+### **Phase 1: Test Infrastructure (15 min)**
+
+#### **Test Setup & Framework**
+```bash
+# Test structure
+tests/
+├── unit/
+│   ├── config-loader.test.js
+│   ├── backend-factory.test.js
+│   ├── strategies/
+│   │   ├── cerebras-strategy.test.js
+│   │   └── self-hosted-strategy.test.js
+│   └── cli-commands.test.js
+├── integration/
+│   ├── proxy-server.test.js
+│   ├── claude-cli-integration.test.js
+│   └── backend-switching.test.js
+├── fixtures/
+│   ├── sample-configs/
+│   └── mock-responses/
+└── manual/
+    └── end-to-end-testing.md
+```
+
+#### **Key Test Cases to Write First**
+1. **Config Loading Tests**: Workspace vs global precedence
+2. **Port Management Tests**: Auto-selection and conflict resolution
+3. **Error Handling Tests**: Backend failure scenarios with recommendations
+4. **Security Tests**: File permissions and secret handling
+5. **CLI Command Tests**: All command interfaces
+
+### **Phase 2: Core Implementation with TDD (45 min)**
+
+#### **TDD Cycle for Each Component**
+1. **Write failing test** for expected behavior
+2. **Implement minimal code** to make test pass
+3. **Refactor** while keeping tests green
+4. **Repeat** for next feature
+
+#### **Component-by-Component TDD**
+
+**Config Loader (10 min)**
+```javascript
+// Test: Should load .llmrc.json over global config
+// Test: Should validate required fields
+// Test: Should set proper file permissions on secrets
+// Implement: ConfigLoader class
+```
+
+**Backend Strategies (15 min)**
+```javascript
+// Test: CerebrasStrategy should format requests correctly
+// Test: SelfHostedStrategy should connect to Python proxy
+// Test: Should handle authentication for each backend type
+// Test: Should provide clear error messages on failure
+// Implement: Strategy classes with error handling
+```
+
+**CLI Commands (10 min)**
+```javascript
+// Test: llm-proxy start should auto-select ports
+// Test: llm-proxy switch should update config
+// Test: llm-proxy recommend should suggest alternatives
+// Implement: CLI command handlers
+```
+
+**Error Handling & Recommendations (10 min)**
+```javascript
+// Test: Should detect backend failures and suggest alternatives
+// Test: Should provide actionable error messages
+// Test: Should log errors without exposing secrets
+// Implement: Error handling and recommendation engine
+```
+
+### **Phase 3: Integration & Manual Testing (30 min)**
+
+#### **Integration Tests**
+- **End-to-end request flow**: Claude CLI → Proxy → Backend
+- **Backend switching**: Live switching between Cerebras and self-hosted
+- **Workspace isolation**: Multiple projects with different configs
+- **Error scenarios**: Backend failures with recommendation flow
+
+#### **Manual Testing Checklist**
+1. **Installation & Setup**
+   - [ ] `npm install -g @jleechan/llm-proxy-server` succeeds
+   - [ ] `llm-proxy setup --workspace .` creates `.llmrc.json`
+   - [ ] Config files have proper permissions (600)
+
+2. **Basic Functionality**
+   - [ ] `llm-proxy start --workspace .` auto-selects available port
+   - [ ] `llm-proxy status` shows backend health
+   - [ ] Claude CLI successfully routes through proxy
+
+3. **Backend Switching**
+   - [ ] `llm-proxy switch cerebras` updates active backend
+   - [ ] Subsequent requests use new backend
+   - [ ] Switch persists across proxy restarts
+
+4. **Error Handling**
+   - [ ] Simulate backend failure (stop Python proxy)
+   - [ ] Verify clear error message with failure reason
+   - [ ] `llm-proxy recommend` suggests alternative backends
+   - [ ] Quick recovery with suggested backend
+
+5. **Multi-Repository**
+   - [ ] Different projects can have different `.llmrc.json` configs
+   - [ ] Proxy correctly uses project-specific config when started from project directory
+   - [ ] No cross-contamination between project configs
+
+6. **Security**
+   - [ ] API keys not visible in logs or error messages
+   - [ ] Config files created with 600 permissions
+   - [ ] Secrets properly handled across all operations
 
 ### **Leveraging Existing Architecture**
 
