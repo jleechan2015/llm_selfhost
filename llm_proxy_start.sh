@@ -52,6 +52,60 @@ echo -e "${BLUE}🚀 Multi-LLM Proxy Startup Script${NC}"
 echo -e "${BLUE}======================================${NC}"
 echo ""
 
+# Helper function for safer SSH connections
+setup_ssh_security() {
+    local ssh_host="$1"
+    local ssh_port="$2"
+    local known_hosts_file="/tmp/vast_known_hosts_$$"
+    
+    echo -e "${BLUE}🔒 Setting up SSH security for $ssh_host:$ssh_port...${NC}"
+    
+    # Create known hosts file with host key
+    ssh-keyscan -p "$ssh_port" "$ssh_host" 2>/dev/null > "$known_hosts_file"
+    
+    if [ -s "$known_hosts_file" ]; then
+        echo -e "${GREEN}✅ Host key verification enabled${NC}"
+        echo "$known_hosts_file"
+    else
+        echo -e "${YELLOW}⚠️  Could not retrieve host key, falling back to less secure connection${NC}"
+        echo ""
+    fi
+}
+
+# Helper function for safe process termination
+terminate_process() {
+    local pid="$1"
+    local timeout="${2:-10}"
+    
+    if [ -z "$pid" ]; then
+        return 0
+    fi
+    
+    # Check if process exists
+    if ! kill -0 "$pid" 2>/dev/null; then
+        return 0
+    fi
+    
+    # Try SIGTERM first
+    kill "$pid" 2>/dev/null || true
+    
+    # Wait for graceful shutdown
+    local waited=0
+    while [ $waited -lt $timeout ] && kill -0 "$pid" 2>/dev/null; do
+        sleep 1
+        ((waited++))
+    done
+    
+    # Force kill if still running
+    if kill -0 "$pid" 2>/dev/null; then
+        echo -e "${YELLOW}⚠️  Process $pid did not terminate gracefully, using SIGKILL${NC}"
+        kill -9 "$pid" 2>/dev/null || true
+        sleep 1
+    fi
+    
+    wait "$pid" 2>/dev/null || true
+}
+
 # Check for required dependencies
 if ! command -v jq >/dev/null 2>&1; then
     echo -e "${RED}❌ jq is required but not installed${NC}"
@@ -118,7 +172,7 @@ test_api_compatibility() {
     # Test messages endpoint with simple request
     local test_request='{
         "messages": [{"role": "user", "content": "Hello"}],
-        "max_tokens": 10
+        "max_tokens": 32
     }'
     
     local response=$(curl -s --connect-timeout 10 \
@@ -148,11 +202,14 @@ test_claude_integration() {
     
     echo -e "${BLUE}🔍 Testing Claude CLI integration with $backend_name...${NC}"
     
-    # Set environment variables
-    export ANTHROPIC_BASE_URL="$base_url"
+    # Set environment variables with security validation
+    if [[ "$base_url" =~ [^a-zA-Z0-9:/._-] ]]; then
+        echo -e "${RED}❌ Unsafe characters detected in base_url: $base_url${NC}"
+        return 1
+    fi
     
-    # Test simple Claude CLI request
-    local claude_response=$(timeout 30 claude "Say 'test successful' and nothing else" 2>/dev/null || echo "TIMEOUT")
+    # Test simple Claude CLI request with safe environment variable assignment
+    local claude_response=$(env ANTHROPIC_BASE_URL="$base_url" timeout 30 claude "Say 'test successful' and nothing else" 2>/dev/null || echo "TIMEOUT")
     
     if echo "$claude_response" | grep -q "test successful"; then
         echo -e "${GREEN}✅ Claude CLI integration test passed${NC}"
@@ -178,11 +235,11 @@ setup_cerebras() {
     if [ -z "$CEREBRAS_API_KEY" ]; then
         echo -e "${RED}❌ CEREBRAS_API_KEY not found in environment${NC}"
         echo -e "${BLUE}💡 Set it with: export CEREBRAS_API_KEY='your-key-here'${NC}"
-        echo -e "${BLUE}💡 Debug: $(env | grep -E 'CEREBRAS|API_KEY' | head -3)${NC}"
+        echo -e "${BLUE}💡 Debug: Found environment variables: $(env | grep -E 'CEREBRAS|API_KEY' | cut -d= -f1 | head -3)${NC}"
         return 1
     fi
     
-    echo -e "${GREEN}✅ Found Cerebras API key: ${CEREBRAS_API_KEY:0:10}...${NC}"
+    echo -e "${GREEN}✅ Found Cerebras API key${NC}"
     
     # Test API key validity
     echo -e "${BLUE}🔍 Testing Cerebras API key...${NC}"
@@ -249,17 +306,26 @@ setup_vast() {
             
             echo -e "${BLUE}🔗 Testing connection to $ssh_host:$ssh_port${NC}"
             
+            # Set up SSH security
+            local known_hosts_file=$(setup_ssh_security "$ssh_host" "$ssh_port")
+            local ssh_opts="-o ConnectTimeout=10"
+            
+            if [ -n "$known_hosts_file" ] && [ -s "$known_hosts_file" ]; then
+                ssh_opts="$ssh_opts -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts_file"
+            else
+                echo -e "${YELLOW}⚠️  Using less secure SSH connection (host key verification disabled)${NC}"
+                ssh_opts="$ssh_opts -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+            fi
+            
             # Test if API is accessible via SSH tunnel
-            if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                -p "$ssh_port" root@"$ssh_host" 'curl -s http://localhost:8000/health' 2>/dev/null | grep -q "healthy"; then
+            if ssh $ssh_opts -p "$ssh_port" root@"$ssh_host" 'curl -s http://localhost:8000/health' 2>/dev/null | grep -q "healthy"; then
                 
                 echo -e "${GREEN}✅ Instance $instance_id is healthy${NC}"
                 instance_url="http://localhost:8000"
                 
                 # Create SSH tunnel
                 pkill -f "ssh.*8000" 2>/dev/null || true
-                ssh -N -L 8000:localhost:8000 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                    -p "$ssh_port" root@"$ssh_host" &
+                ssh -N -L 8000:localhost:8000 $ssh_opts -p "$ssh_port" root@"$ssh_host" &
                 local tunnel_pid=$!
                 echo $tunnel_pid > /tmp/vast_ssh_tunnel.pid
                 
@@ -366,8 +432,7 @@ run_comprehensive_tests() {
     fi
     
     # Stop the proxy server
-    kill $proxy_pid 2>/dev/null || true
-    wait $proxy_pid 2>/dev/null || true
+    terminate_process $proxy_pid
     
     # Cleanup
     rm -f .llmrc.json
