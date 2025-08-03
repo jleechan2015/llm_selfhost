@@ -103,9 +103,12 @@ async def create_message(request: ChatRequest):
                 "content": content
             })
         
+        # Map Claude models to available Ollama model
+        ollama_model = "qwen2.5-coder:7b"  # Force use of available model
+        
         # Call LiteLLM with Ollama
         response = completion(
-            model=f"ollama/{request.model}",
+            model=f"ollama/{ollama_model}",
             messages=litellm_messages,
             api_base=OLLAMA_BASE_URL,
             max_tokens=request.max_tokens,

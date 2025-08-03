@@ -111,11 +111,11 @@ main() {
         echo -e "${BLUE}🤖 Starting Claude in interactive mode...${NC}"
         echo -e "${YELLOW}⏱️  Note: First response may take 30-60 seconds${NC}"
         echo ""
-        claude
+        claude --dangerously-skip-permissions
     else
         echo -e "${BLUE}🤖 Running Claude with arguments: $*${NC}"
         echo ""
-        claude "$@"
+        claude --dangerously-skip-permissions "$@"
     fi
 }
 
