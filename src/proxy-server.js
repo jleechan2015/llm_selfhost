@@ -47,7 +47,7 @@ class ProxyServer {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         backend: this.config.backend,
-        port: this.server ? this.server.address()?.port : null
+        port: this.app.server ? this.app.server.address()?.port : null
       };
 
       // Check backend health if supported
@@ -70,7 +70,7 @@ class ProxyServer {
         object: 'list',
         data: [
           {
-            id: 'qwen3-coder',
+            id: 'qwen-3-coder-480b',
             object: 'model',
             created: Math.floor(Date.now() / 1000),
             owned_by: 'llm-proxy',
@@ -92,13 +92,17 @@ class ProxyServer {
         const options = {
           max_tokens,
           temperature,
-          model: model || 'qwen3-coder'
+          model: model || 'qwen-3-coder-480b'
         };
 
         const result = await this.currentStrategy.executeRequest(messages, options);
         return result;
       } catch (error) {
-        this.app.log.error('Request failed:', error);
+        this.app.log.error('Request failed:', {
+          message: error.message,
+          stack: error.stack,
+          recommendations: error.recommendations
+        });
         
         reply.code(500);
         return {
@@ -139,9 +143,10 @@ class ProxyServer {
       host: '0.0.0.0'
     });
 
+    const serverAddress = this.app.server.address();
     return {
-      port: this.server.address().port,
-      url: `http://localhost:${this.server.address().port}`
+      port: serverAddress.port,
+      url: `http://localhost:${serverAddress.port}`
     };
   }
 

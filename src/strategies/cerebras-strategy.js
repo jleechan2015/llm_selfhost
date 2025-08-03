@@ -16,7 +16,7 @@ class CerebrasStrategy {
   async executeRequest(messages, options = {}) {
     try {
       const requestData = {
-        model: options.model || 'qwen3-coder',
+        model: options.model || 'qwen-3-coder-480b',
         messages: messages,
         max_tokens: options.max_tokens,
         temperature: options.temperature
