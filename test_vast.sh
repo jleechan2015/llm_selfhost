@@ -24,13 +24,13 @@ fi
 echo -e "${BLUE}🔧 Creating self-hosted configuration...${NC}"
 cat > .llmrc.json << EOF
 {
-  "backend": "self-hosted",
+  "backend": "vast-ai",
   "port": "auto",
   "backends": {
-    "self-hosted": {
+    "vast-ai": {
       "type": "self-hosted",
       "url": "http://localhost:8000",
-      "description": "Vast.ai GPU instance or local proxy"
+      "description": "Vast.ai GPU instance via SSH tunnel"
     }
   }
 }
@@ -78,7 +78,7 @@ echo ""
 echo -e "${BLUE}📊 Test Results:${NC}"
 echo -e "${GREEN}✅ Configuration loading works${NC}"
 echo -e "${GREEN}✅ Proxy server starts successfully${NC}"
-echo -e "${GREEN}✅ Health endpoint works with self-hosted backend${NC}"
+echo -e "${GREEN}✅ Health endpoint works with vast-ai backend${NC}"
 echo -e "${YELLOW}⚠️  Actual vast.ai connection would require running GPU instance${NC}"
 
 # Cleanup

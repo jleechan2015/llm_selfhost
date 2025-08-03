@@ -1,0 +1,144 @@
+#!/bin/bash
+# Claude CLI with Vast.ai Integration
+# Usage: ./claude-vast [claude options]
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Configuration
+VAST_SSH_HOST="ssh7.vast.ai"
+VAST_SSH_PORT="12806"
+VAST_USER="root"
+LOCAL_PORT="8000"
+VAST_PORT="8000"
+
+echo -e "${BLUE}🚀 Claude CLI - Vast.ai Mode${NC}"
+echo "=============================="
+
+# Check if SSH tunnel is active
+check_tunnel() {
+    if curl -s http://localhost:${LOCAL_PORT}/health >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ SSH tunnel active${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}⚠️  SSH tunnel not active${NC}"
+        return 1
+    fi
+}
+
+# Start SSH tunnel
+start_tunnel() {
+    echo -e "${BLUE}🔗 Starting SSH tunnel to vast.ai...${NC}"
+    
+    # Kill existing tunnel if any
+    pkill -f "ssh.*${VAST_SSH_HOST}.*${LOCAL_PORT}:localhost:${VAST_PORT}" 2>/dev/null
+    
+    # Start new tunnel in background
+    nohup ssh -N -L ${LOCAL_PORT}:localhost:${VAST_PORT} \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -o ServerAliveInterval=30 \
+        -o ServerAliveCountMax=3 \
+        -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} \
+        > /tmp/claude-vast-tunnel.log 2>&1 &
+    
+    TUNNEL_PID=$!
+    echo "Tunnel PID: $TUNNEL_PID"
+    
+    # Wait for tunnel to establish
+    echo -e "${BLUE}⏳ Waiting for tunnel to establish...${NC}"
+    for i in {1..10}; do
+        sleep 2
+        if check_tunnel; then
+            echo -e "${GREEN}✅ Tunnel established successfully${NC}"
+            return 0
+        fi
+    done
+    
+    echo -e "${RED}❌ Failed to establish tunnel${NC}"
+    return 1
+}
+
+# Check vast.ai proxy health
+check_proxy() {
+    echo -e "${BLUE}🔍 Checking vast.ai proxy health...${NC}"
+    HEALTH=$(curl -s http://localhost:${LOCAL_PORT}/health 2>/dev/null)
+    
+    if echo "$HEALTH" | grep -q "healthy"; then
+        echo -e "${GREEN}✅ Vast.ai proxy healthy${NC}"
+        echo "Backend: $(echo "$HEALTH" | python3 -c "import json, sys; print(json.load(sys.stdin).get('components', {}).get('ollama', 'unknown'))" 2>/dev/null || echo "unknown")"
+        return 0
+    else
+        echo -e "${RED}❌ Vast.ai proxy unhealthy${NC}"
+        echo "Response: $HEALTH"
+        return 1
+    fi
+}
+
+# Main function
+main() {
+    # Check tunnel status
+    if ! check_tunnel; then
+        echo -e "${YELLOW}🔧 Setting up vast.ai connection...${NC}"
+        if ! start_tunnel; then
+            echo -e "${RED}❌ Failed to connect to vast.ai${NC}"
+            echo -e "${YELLOW}💡 Make sure your vast.ai instance is running and accessible${NC}"
+            exit 1
+        fi
+    fi
+    
+    # Check proxy health
+    if ! check_proxy; then
+        echo -e "${RED}❌ Vast.ai proxy not responding properly${NC}"
+        echo -e "${YELLOW}💡 Check if LiteLLM proxy is running on vast.ai instance${NC}"
+        exit 1
+    fi
+    
+    echo ""
+    echo -e "${GREEN}🎯 Ready to use Claude with vast.ai!${NC}"
+    echo -e "${BLUE}📡 Using: http://localhost:${LOCAL_PORT}${NC}"
+    echo ""
+    
+    # Set environment and run Claude
+    export ANTHROPIC_BASE_URL="http://localhost:${LOCAL_PORT}"
+    
+    # Pass all arguments to claude
+    if [ $# -eq 0 ]; then
+        echo -e "${BLUE}🤖 Starting Claude in interactive mode...${NC}"
+        echo -e "${YELLOW}⏱️  Note: First response may take 30-60 seconds${NC}"
+        echo ""
+        claude
+    else
+        echo -e "${BLUE}🤖 Running Claude with arguments: $*${NC}"
+        echo ""
+        claude "$@"
+    fi
+}
+
+# Help message
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    echo "Claude CLI with Vast.ai Integration"
+    echo ""
+    echo "Usage:"
+    echo "  ./claude-vast                    # Interactive mode"
+    echo "  ./claude-vast -p \"prompt\"        # Headless mode"
+    echo "  ./claude-vast --verbose -p \"...\" # Verbose headless"
+    echo "  ./claude-vast --help             # Show this help"
+    echo ""
+    echo "Configuration:"
+    echo "  SSH Host: ${VAST_SSH_HOST}:${VAST_SSH_PORT}"
+    echo "  Tunnel: localhost:${LOCAL_PORT} -> vast.ai:${VAST_PORT}"
+    echo ""
+    echo "Requirements:"
+    echo "  - SSH access to vast.ai instance"
+    echo "  - LiteLLM proxy running on vast.ai"
+    echo "  - Ollama with qwen2.5-coder:7b model"
+    exit 0
+fi
+
+# Run main function
+main "$@"
