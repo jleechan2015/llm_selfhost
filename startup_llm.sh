@@ -13,8 +13,8 @@ ollama serve &
 sleep 5 # Give the server a moment to start up
 
 echo ">> 3. Pulling the LLM model..."
-# Use qwen2.5-coder:7b as qwen3-coder is not available
-ollama pull qwen2.5-coder:7b
+# Using qwen3-coder as specified (30B model, 19GB)
+ollama pull qwen3-coder
 
 echo ">> 4. Cloning your application repository..."
 # The GIT_REPO environment variable is passed in by the 'vastai create' command.
