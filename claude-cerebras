@@ -86,7 +86,7 @@ start_cerebras_proxy() {
     
     # Find the script directory
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    python3 "$SCRIPT_DIR/cerebras_proxy_simple.py" > /tmp/cerebras_proxy.log 2>&1 &
+    python3 "$SCRIPT_DIR/cerebras_tools_proxy.py" > /tmp/cerebras_proxy.log 2>&1 &
     PROXY_PID=$!
     
     # Wait for proxy to start
