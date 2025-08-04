@@ -131,6 +131,31 @@ export ANTHROPIC_API_KEY="dummy"
 - No data leaves your infrastructure (vast.ai/local options)
 - Optional Redis caching with encryption
 
+## Testing
+
+The project includes comprehensive test suites to validate all integrations:
+
+**Run all tests:**
+```bash
+cd tests/
+./run_all_tests.sh
+```
+
+**Test individual backends:**
+```bash
+# Test LM Studio integration
+./test_claude_local.sh
+
+# Test vast.ai integration  
+./test_claude_vast.sh
+```
+
+**LLM-driven testing:**
+- Tests verify actual file creation/deletion by the LLM
+- Validates API format translation (Anthropic ↔ OpenAI)
+- Confirms end-to-end functionality of each backend
+- Tests include connectivity, performance, and cleanup validation
+
 ## Troubleshooting
 
 **Proxy not starting?**
