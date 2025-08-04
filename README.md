@@ -77,6 +77,7 @@ The proxy translates between:
 - **`simple_api_proxy.py`** - Lightweight vast.ai proxy
 - **`claude-vast`** - SSH tunnel management and auto-startup for vast.ai
 - **`claude-local`** - LM Studio integration with WSL host discovery
+- **`claude-cerebras`** - Cerebras Cloud API integration 
 - **`install-claude-proxy.sh`** - Unified installer script
 
 ## Manual Usage
@@ -93,6 +94,9 @@ Or use dedicated commands:
 
 # For LM Studio (auto-discovers Windows host in WSL)
 ./claude-local "help me debug this Python script"
+
+# For Cerebras Cloud (480B model)
+./claude-cerebras "explain this complex algorithm"
 
 # Or use Claude CLI normally after starting proxy
 claude "help me debug this Python script"
@@ -148,6 +152,9 @@ cd tests/
 
 # Test vast.ai integration  
 ./test_claude_vast.sh
+
+# Test Cerebras Cloud integration
+./test_claude_cerebras.sh
 ```
 
 **LLM-driven testing:**
