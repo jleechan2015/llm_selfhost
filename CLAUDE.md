@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Core Development
 - **Install dependencies**: `pip install -r requirements.txt` 
-- **Start main API proxy**: `python3 simple_api_proxy.py`
-- **Start alternative proxy**: `python3 api_proxy.py` 
+- **Start vast.ai proxy with tools**: `python3 vast_tools_proxy.py`
+- **Start local LM proxy with tools**: `python3 local_tools_proxy.py`
+- **Start cerebras proxy with tools**: `python3 cerebras_tools_proxy.py`
 - **Run LLM cache tests**: `python3 llm_cache_app.py`
 - **Automated setup**: `./install.sh` (full system installation)
 - **Quick startup**: `./startup_llm.sh` (for vast.ai environments)
@@ -29,10 +30,11 @@ This is a **distributed LLM caching system** that provides cost-effective LLM in
 
 ### Core Components
 
-1. **API Proxies** (2 implementations):
-   - `simple_api_proxy.py`: Lightweight proxy with basic Redis caching
-   - `api_proxy.py`: Advanced proxy with ModelCache integration
-   - Both provide Anthropic API-compatible endpoints for Claude CLI integration
+1. **Tool-Enabled API Proxies** (3 implementations):
+   - `vast_tools_proxy.py`: Tool-enabled proxy for vast.ai with Redis caching
+   - `cerebras_tools_proxy.py`: Tool-enabled proxy for Cerebras Cloud API  
+   - `local_tools_proxy.py`: Tool-enabled proxy for local LM Studio
+   - All provide Anthropic API-compatible endpoints with full tool execution support
 
 2. **LLM Backend**:
    - Ollama server running qwen3-coder model (30B MoE, 3.3B active parameters)
@@ -57,8 +59,10 @@ Claude CLI → API Proxy → Redis Cache Check → [Cache Hit: Return | Cache Mi
 
 ### Key Files
 
-- `simple_api_proxy.py`: Main production proxy (recommended)
-- `api_proxy.py`: Advanced proxy with ModelCache 
+- `vast_tools_proxy.py`: Tool-enabled proxy for vast.ai (recommended for Claude CLI)
+- `cerebras_tools_proxy.py`: Tool-enabled proxy for Cerebras Cloud API
+- `local_tools_proxy.py`: Tool-enabled proxy for local LM Studio
+- `claude_tools_base.py`: Base class providing tool execution capabilities
 - `main.py`: Legacy entry point
 - `llm_cache_app.py`: Standalone cache testing app
 - `install.sh`: Comprehensive installation script
@@ -97,8 +101,9 @@ export ANTHROPIC_MODEL="qwen3-coder"
 
 ### Deployment Patterns
 
-1. **Local Development**: Run `python3 simple_api_proxy.py`
-2. **Vast.ai Remote**: Use `startup_llm.sh` for automated deployment
-3. **Production**: Use `install.sh` for full system setup with monitoring
+1. **Local Development**: Run `python3 local_tools_proxy.py`
+2. **Vast.ai Remote**: Use `python3 vast_tools_proxy.py` or `startup_llm.sh` for automated deployment
+3. **Cerebras Cloud**: Run `python3 cerebras_tools_proxy.py`
+4. **Production**: Use `install.sh` for full system setup with monitoring
 
 The system gracefully handles missing Redis credentials and can operate without caching for development.

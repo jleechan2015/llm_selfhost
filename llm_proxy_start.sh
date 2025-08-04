@@ -314,7 +314,7 @@ setup_vast() {
                 ssh_opts="$ssh_opts -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts_file"
             else
                 echo -e "${YELLOW}⚠️  Using less secure SSH connection (host key verification disabled)${NC}"
-                ssh_opts="$ssh_opts -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+                ssh_opts="$ssh_opts -o UserKnownHostsFile=$HOME/.ssh/vast_known_hosts"
             fi
             
             # Test if API is accessible via SSH tunnel

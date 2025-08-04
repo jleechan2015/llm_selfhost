@@ -71,7 +71,7 @@ Add to your `claude_start.sh` or equivalent:
 
 ```bash
 # Set up SSH tunnel (vast.ai only exposes SSH ports)
-ssh -N -L 8001:localhost:8000 -o StrictHostKeyChecking=no root@ssh4.vast.ai -p 26192 &
+ssh -N -L 8001:localhost:8000 root@ssh4.vast.ai -p 26192 &
 
 # Set environment variables to redirect Claude CLI
 export ANTHROPIC_BASE_URL="http://localhost:8001"

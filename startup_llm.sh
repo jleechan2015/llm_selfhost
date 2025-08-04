@@ -23,7 +23,7 @@ if [ \! -d "/app" ]; then
 fi
 cd /app
 
-echo ">> 5. Launching the API proxy..."
-# Launch the API proxy that bridges Anthropic API to Ollama
-python3 simple_api_proxy.py
+echo ">> 5. Launching the Tool-Enabled API proxy..."
+# Launch the tool-enabled API proxy that bridges Anthropic API to Ollama with tool execution
+python3 vast_tools_proxy.py
 EOF < /dev/null

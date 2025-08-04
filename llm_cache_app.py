@@ -5,6 +5,7 @@ Fast, cost-effective LLM inference with Redis Cloud Enterprise caching
 """
 
 import os
+import os
 import requests
 import json
 from modelcache import cache
@@ -15,9 +16,9 @@ from modelcache.embedding import SentenceTransformer
 def initialize_cache():
     """Initialize ModelCache with Redis Cloud Enterprise"""
     redis_config = {
-        'host': 'redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com',
-        'port': 14339,
-        'password': 'cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl',
+        'host': os.getenv('REDIS_HOST'),
+        'port': int(os.getenv('REDIS_PORT', 14339)),
+        'password': os.getenv('REDIS_PASSWORD'),
         'ssl': True
     }
     

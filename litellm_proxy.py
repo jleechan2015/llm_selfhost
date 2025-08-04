@@ -14,8 +14,8 @@ from datetime import datetime
 
 app = FastAPI(title="LiteLLM Proxy for Vast.ai")
 
-# Configuration
-OLLAMA_HOST = "localhost:11434" 
+# Configuration - Point to vast.ai through SSH tunnel
+OLLAMA_HOST = "localhost:11434"  # This will be your vast.ai Ollama via SSH tunnel
 OLLAMA_BASE_URL = f"http://{OLLAMA_HOST}"
 
 class Message(BaseModel):

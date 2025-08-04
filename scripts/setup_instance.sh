@@ -56,7 +56,7 @@ try:
     r = redis.Redis(
         host='redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com',
         port=14339,
-        password='cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl',
+        password=os.getenv('REDIS_PASSWORD'),
         decode_responses=True
     )
     r.ping()
@@ -80,7 +80,7 @@ echo "Redis Connection:"
 python3 -c "
 import redis
 try:
-    r = redis.Redis(host='redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com', port=14339, password='cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl', decode_responses=True)
+    r = redis.Redis(host=os.getenv('REDIS_HOST'), port=int(os.getenv('REDIS_PORT')), password=os.getenv('REDIS_PASSWORD'), decode_responses=True)
     info = r.info()
     print(f'Connected clients: {info.get(\"connected_clients\", \"N/A\")}')
     print(f'Used memory: {info.get(\"used_memory_human\", \"N/A\")}')
