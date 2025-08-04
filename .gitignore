@@ -66,3 +66,12 @@ Thumbs.db
 .claude/commands/
 *.py.tmp
 *.sh.tmp
+
+# Python generated files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local development environment
+claude_env/

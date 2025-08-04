@@ -11,12 +11,7 @@ import json
 import time
 import hashlib
 import traceback
-import subprocess
-import tempfile
-import uuid
-import re
 import logging
-from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
 
@@ -26,6 +21,9 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import requests
+
+# Import base tool classes
+from claude_tools_base import ToolExecutionMixin
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -46,6 +44,14 @@ print(f"✅ LM Studio configuration:")
 print(f"🌐 LM Studio: {LM_STUDIO_BASE_URL}")
 print(f"📱 Model: {LM_STUDIO_MODEL}")
 
+class LocalToolsProxy(ToolExecutionMixin):
+    """Local LM Studio proxy with tool execution capabilities"""
+    
+    def __init__(self):
+        super().__init__()
+        print(f"🏠 Local Tools Proxy initialized with session: {self.tools.session_id}")
+
+# Legacy class name for compatibility
 class ClaudeCodeTools:
     """Implements Claude Code's core tools with local LM Studio compatibility"""
     
@@ -222,96 +228,17 @@ app.add_middleware(
 )
 
 # Initialize tools
-tools = ClaudeCodeTools()
+proxy = LocalToolsProxy()
 
 def should_use_tools(content: str) -> bool:
-    """Determine if response should trigger tool usage"""
-    patterns = [
-        r'```bash\n(.*?)\n```',
-        r'I\'ll (run|execute|create|write|edit)',
-        r'Let me (run|execute|create|write|edit)',
-        r'I need to (run|execute|create|write|edit)',
-        r'I\'m going to (run|execute|create|write|edit)',
-        r'Creating? (a )?file',
-        r'Writing (a )?file',
-        r'Running (the )?command',
-    ]
-    
-    for pattern in patterns:
-        if re.search(pattern, content, re.DOTALL | re.IGNORECASE):
-            return True
-    return False
+    return proxy.should_use_tools(content)
 
 def extract_tool_requests(content: str) -> List[Dict]:
-    """Extract tool requests from Claude's response"""
-    tool_requests = []
-    
-    # Extract bash commands
-    bash_pattern = r'```bash\n(.*?)\n```'
-    bash_matches = re.findall(bash_pattern, content, re.DOTALL)
-    
-    for command in bash_matches:
-        if command.strip():
-            tool_requests.append({
-                "type": "bash",
-                "command": command.strip()
-            })
-    
-    # Extract file creation requests (simple pattern matching)
-    if re.search(r'creat[ei]ng?\s+.*file.*named?\s+"([^"]+)"', content, re.IGNORECASE):
-        file_match = re.search(r'creat[ei]ng?\s+.*file.*named?\s+"([^"]+)"', content, re.IGNORECASE)
-        if file_match:
-            filename = file_match.group(1)
-            # Look for content in the same response
-            content_match = re.search(r'with.*content\s+"([^"]+)"', content, re.IGNORECASE)
-            file_content = content_match.group(1) if content_match else ""
-            
-            tool_requests.append({
-                "type": "str_replace_editor",
-                "command": "create",
-                "path": filename,
-                "file_text": file_content
-            })
-    
-    return tool_requests
+    return proxy.extract_tool_requests(content)
 
 def execute_tools(tool_requests: List[Dict]) -> str:
-    """Execute tool requests and return results"""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"🔧 [{timestamp}] LOCAL TOOL EXECUTION STARTED - {len(tool_requests)} tools requested")
-    
-    results = []
-    
-    for i, request in enumerate(tool_requests):
-        try:
-            tool_type = request["type"]
-            print(f"🛠️  [{timestamp}] Tool {i+1}/{len(tool_requests)}: {tool_type}")
-            
-            if request["type"] == "bash":
-                command = request["command"]
-                print(f"📝 [{timestamp}] Executing bash: {command}")
-                result = tools.bash(command)
-                print(f"✅ [{timestamp}] Bash completed - Exit code: {result['exit_code']}")
-                results.append(f"\n**Bash Execution:**\n```\nCommand: {command}\nExit code: {result['exit_code']}\nOutput: {result['stdout']}\nError: {result['stderr']}\n```")
-            
-            elif request["type"] == "str_replace_editor":
-                operation = request.get("command", "unknown")
-                file_path = request.get("path", "unknown")
-                print(f"📄 [{timestamp}] File operation: {operation} on {file_path}")
-                result = tools.str_replace_editor(**{k: v for k, v in request.items() if k != "type"})
-                if "error" in result:
-                    print(f"❌ [{timestamp}] File operation failed: {result['error']}")
-                    results.append(f"\n**File Operation Error:** {result['error']}")
-                else:
-                    print(f"✅ [{timestamp}] File operation successful")
-                    results.append(f"\n**File Operation:** {result['result']}")
-            
-        except Exception as e:
-            print(f"❌ [{timestamp}] Tool execution error: {str(e)}")
-            results.append(f"\n**Tool Error:** {str(e)}")
-    
-    print(f"🏁 [{timestamp}] LOCAL TOOL EXECUTION COMPLETED - {len(tool_requests)} tools processed")
-    return "\n".join(results)
+    return proxy.execute_tools(tool_requests)
+
 
 @app.get("/health")
 async def health_check():
@@ -403,24 +330,7 @@ async def create_message(request: Request):
         # Forward to LM Studio
         try:
             # Add tool instructions to system message
-            enhanced_messages = []
-            has_system = any(msg.get('role') == 'system' for msg in messages)
-            
-            if not has_system:
-                enhanced_messages.append({
-                    "role": "system",
-                    "content": """You are a helpful coding assistant with access to system tools.
-
-When you need to execute commands or work with files, be explicit about your actions:
-- For bash commands: Write ```bash\\ncommand\\n``` blocks
-- For file creation: Say "I'll create a file named 'filename'" and include the content
-- Always show the actual commands you want to execute in code blocks
-- Be specific about file paths and command syntax
-
-You have access to bash execution and file operations."""
-                })
-            
-            enhanced_messages.extend(messages)
+            enhanced_messages = proxy.add_tool_instructions_to_messages(messages)
             
             # Convert to OpenAI format for LM Studio
             lm_studio_request = {
