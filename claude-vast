@@ -103,15 +103,15 @@ start_remote_server() {
     # Check if startup script exists
     STARTUP_CHECK=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                    -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} \
-                   "ls -la startup_llm.sh simple_api_proxy.py 2>/dev/null" 2>/dev/null)
+                   "ls -la startup_llm.sh vast_tools_proxy.py 2>/dev/null" 2>/dev/null)
     
     if [[ -z "$STARTUP_CHECK" ]]; then
         echo -e "${YELLOW}⚠️  Startup scripts not found on remote instance${NC}"
-        echo -e "${BLUE}📤 Deploying startup scripts...${NC}"
+        echo -e "${BLUE}📤 Deploying tool-enabled proxy scripts...${NC}"
         
-        # Copy essential files to remote instance
+        # Copy essential files to remote instance (including tools-enabled proxy)
         scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            -P ${VAST_SSH_PORT} startup_llm.sh simple_api_proxy.py requirements.txt \
+            -P ${VAST_SSH_PORT} startup_llm.sh vast_tools_proxy.py requirements.txt \
             ${VAST_USER}@${VAST_SSH_HOST}:~/ 2>/dev/null
         
         if [ $? -ne 0 ]; then
