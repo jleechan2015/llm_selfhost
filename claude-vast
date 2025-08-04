@@ -70,7 +70,86 @@ start_tunnel() {
     return 1
 }
 
-# Check vast.ai proxy health
+# Check if server is running on vast.ai
+check_remote_server() {
+    echo -e "${BLUE}🔍 Checking if server is running on vast.ai...${NC}"
+    
+    # Check if we can SSH into the instance
+    if ! ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+         -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} "echo 'SSH OK'" >/dev/null 2>&1; then
+        echo -e "${RED}❌ Cannot SSH to vast.ai instance${NC}"
+        echo -e "${YELLOW}💡 Check if instance is running and SSH details are correct${NC}"
+        return 1
+    fi
+    
+    # Check if proxy server is running on the remote instance
+    REMOTE_STATUS=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                   -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} \
+                   "curl -s http://localhost:${VAST_PORT}/health 2>/dev/null" 2>/dev/null)
+    
+    if echo "$REMOTE_STATUS" | grep -q "healthy"; then
+        echo -e "${GREEN}✅ Server is running on vast.ai${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}⚠️  Server not running on vast.ai${NC}"
+        return 1
+    fi
+}
+
+# Start server on vast.ai instance
+start_remote_server() {
+    echo -e "${BLUE}🚀 Starting server on vast.ai instance...${NC}"
+    
+    # Check if startup script exists
+    STARTUP_CHECK=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                   -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} \
+                   "ls -la startup_llm.sh simple_api_proxy.py 2>/dev/null" 2>/dev/null)
+    
+    if [[ -z "$STARTUP_CHECK" ]]; then
+        echo -e "${YELLOW}⚠️  Startup scripts not found on remote instance${NC}"
+        echo -e "${BLUE}📤 Deploying startup scripts...${NC}"
+        
+        # Copy essential files to remote instance
+        scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -P ${VAST_SSH_PORT} startup_llm.sh simple_api_proxy.py requirements.txt \
+            ${VAST_USER}@${VAST_SSH_HOST}:~/ 2>/dev/null
+        
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ Failed to deploy scripts to vast.ai${NC}"
+            return 1
+        fi
+    fi
+    
+    # Start the server
+    echo -e "${BLUE}⏳ Starting proxy server (this may take 2-3 minutes)...${NC}"
+    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} \
+        "chmod +x startup_llm.sh && nohup ./startup_llm.sh > server.log 2>&1 &" 2>/dev/null
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to start server on vast.ai${NC}"
+        return 1
+    fi
+    
+    # Wait for server to start
+    echo -e "${BLUE}⏳ Waiting for server to initialize...${NC}"
+    for i in {1..60}; do
+        sleep 5
+        if check_remote_server; then
+            echo -e "${GREEN}✅ Server started successfully${NC}"
+            return 0
+        fi
+        if [ $((i % 6)) -eq 0 ]; then
+            echo -e "${YELLOW}⏳ Still starting... (${i}/60)${NC}"
+        fi
+    done
+    
+    echo -e "${RED}❌ Server failed to start within 5 minutes${NC}"
+    echo -e "${YELLOW}💡 Check server.log on vast.ai instance for details${NC}"
+    return 1
+}
+
+# Check vast.ai proxy health through tunnel
 check_proxy() {
     echo -e "${BLUE}🔍 Checking vast.ai proxy health...${NC}"
     HEALTH=$(curl -s http://localhost:${LOCAL_PORT}/health 2>/dev/null)
@@ -88,20 +167,30 @@ check_proxy() {
 
 # Main function
 main() {
-    # Check tunnel status
+    # Step 1: Check if server is running on vast.ai
+    if ! check_remote_server; then
+        echo -e "${YELLOW}🔧 Server not running, attempting to start it...${NC}"
+        if ! start_remote_server; then
+            echo -e "${RED}❌ Failed to start server on vast.ai${NC}"
+            echo -e "${YELLOW}💡 Try manually SSH-ing to your instance and running startup_llm.sh${NC}"
+            exit 1
+        fi
+    fi
+    
+    # Step 2: Set up SSH tunnel
     if ! check_tunnel; then
-        echo -e "${YELLOW}🔧 Setting up vast.ai connection...${NC}"
+        echo -e "${YELLOW}🔧 Setting up SSH tunnel...${NC}"
         if ! start_tunnel; then
-            echo -e "${RED}❌ Failed to connect to vast.ai${NC}"
+            echo -e "${RED}❌ Failed to establish SSH tunnel${NC}"
             echo -e "${YELLOW}💡 Make sure your vast.ai instance is running and accessible${NC}"
             exit 1
         fi
     fi
     
-    # Check proxy health
+    # Step 3: Verify end-to-end connectivity
     if ! check_proxy; then
-        echo -e "${RED}❌ Vast.ai proxy not responding properly${NC}"
-        echo -e "${YELLOW}💡 Check if LiteLLM proxy is running on vast.ai instance${NC}"
+        echo -e "${RED}❌ End-to-end connection failed${NC}"
+        echo -e "${YELLOW}💡 Server is running but tunnel may have issues${NC}"
         exit 1
     fi
     
@@ -129,22 +218,29 @@ main() {
 
 # Help message
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then
-    echo "Claude CLI with Vast.ai Integration"
+    echo "Claude CLI with Vast.ai Integration - Auto-Startup Enabled"
     echo ""
     echo "Usage:"
-    echo "  ./claude-vast                    # Interactive mode"
+    echo "  ./claude-vast                    # Interactive mode (starts server if needed)"
     echo "  ./claude-vast -p \"prompt\"        # Headless mode"
     echo "  ./claude-vast --verbose -p \"...\" # Verbose headless"
     echo "  ./claude-vast --help             # Show this help"
     echo ""
+    echo "What it does:"
+    echo "  1. ✅ Checks if server is running on vast.ai"
+    echo "  2. 🚀 Automatically starts server if needed (deploys & runs startup_llm.sh)"
+    echo "  3. 🔗 Sets up SSH tunnel to vast.ai instance"
+    echo "  4. 🤖 Runs Claude CLI with proper configuration"
+    echo ""
     echo "Configuration:"
     echo "  SSH Host: ${VAST_SSH_HOST}:${VAST_SSH_PORT}"
     echo "  Tunnel: localhost:${LOCAL_PORT} -> vast.ai:${VAST_PORT}"
+    echo "  Config: ${CONFIG_FILE}"
     echo ""
     echo "Requirements:"
     echo "  - SSH access to vast.ai instance"
-    echo "  - LiteLLM proxy running on vast.ai"
-    echo "  - Ollama with qwen2.5-coder:7b model"
+    echo "  - Vast.ai instance with basic Python/curl installed"
+    echo "  - Local files: startup_llm.sh, simple_api_proxy.py, requirements.txt"
     exit 0
 fi
 
