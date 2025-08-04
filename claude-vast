@@ -19,7 +19,7 @@ else
     VAST_SSH_HOST="${VAST_SSH_HOST:-ssh7.vast.ai}"
     VAST_SSH_PORT="${VAST_SSH_PORT:-12806}"
     VAST_USER="${VAST_USER:-root}"
-    LOCAL_PORT="${LOCAL_PORT:-8001}"
+    LOCAL_PORT="${LOCAL_PORT:-8000}"
     VAST_PORT="${VAST_PORT:-8000}"
 fi
 

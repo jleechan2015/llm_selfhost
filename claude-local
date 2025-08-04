@@ -170,7 +170,7 @@ start_local_proxy() {
     
     # Start the tool-enabled proxy
     echo -e "${BLUE}⏳ Starting tool-enabled proxy server...${NC}"
-    python3 "$SCRIPT_DIR/local_tools_proxy.py" > /tmp/lm_studio_proxy.log 2>&1 &
+    "$SCRIPT_DIR/claude_env/bin/python" "$SCRIPT_DIR/local_tools_proxy.py" > /tmp/lm_studio_proxy.log 2>&1 &
     PROXY_PID=$!
     
     # Wait for proxy to start

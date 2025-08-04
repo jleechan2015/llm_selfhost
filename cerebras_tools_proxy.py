@@ -316,24 +316,40 @@ def extract_tool_requests(content: str) -> List[Dict]:
 
 def execute_tools(tool_requests: List[Dict]) -> str:
     """Execute tool requests and return results"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"🔧 [{timestamp}] CEREBRAS TOOL EXECUTION STARTED - {len(tool_requests)} tools requested")
+    
     results = []
     
-    for request in tool_requests:
+    for i, request in enumerate(tool_requests):
         try:
+            tool_type = request["type"]
+            print(f"🛠️  [{timestamp}] Tool {i+1}/{len(tool_requests)}: {tool_type}")
+            
             if request["type"] == "bash":
-                result = tools.bash(request["command"])
-                results.append(f"\n**Bash Execution:**\n```\nCommand: {request['command']}\nExit code: {result['exit_code']}\nOutput: {result['stdout']}\nError: {result['stderr']}\n```")
+                command = request["command"]
+                print(f"📝 [{timestamp}] Executing bash: {command}")
+                result = tools.bash(command)
+                print(f"✅ [{timestamp}] Bash completed - Exit code: {result['exit_code']}")
+                results.append(f"\n**Bash Execution:**\n```\nCommand: {command}\nExit code: {result['exit_code']}\nOutput: {result['stdout']}\nError: {result['stderr']}\n```")
             
             elif request["type"] == "str_replace_editor":
+                operation = request.get("command", "unknown")
+                file_path = request.get("path", "unknown")
+                print(f"📄 [{timestamp}] File operation: {operation} on {file_path}")
                 result = tools.str_replace_editor(**{k: v for k, v in request.items() if k != "type"})
                 if "error" in result:
+                    print(f"❌ [{timestamp}] File operation failed: {result['error']}")
                     results.append(f"\n**File Operation Error:** {result['error']}")
                 else:
+                    print(f"✅ [{timestamp}] File operation successful")
                     results.append(f"\n**File Operation:** {result['result']}")
             
         except Exception as e:
+            print(f"❌ [{timestamp}] Tool execution error: {str(e)}")
             results.append(f"\n**Tool Error:** {str(e)}")
     
+    print(f"🏁 [{timestamp}] CEREBRAS TOOL EXECUTION COMPLETED - {len(tool_requests)} tools processed")
     return "\n".join(results)
 
 @app.get("/health")

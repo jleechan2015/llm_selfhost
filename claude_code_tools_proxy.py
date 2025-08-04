@@ -167,8 +167,11 @@ class ClaudeCodeProxy(BaseHTTPRequestHandler):
     vast_api_url = "http://localhost:8000"
     
     def log_message(self, format, *args):
-        """Override to reduce logging noise"""
-        pass
+        """Override to reduce logging noise - log to stderr with timestamp"""
+        if format and args:
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+            message = format % args
+            sys.stderr.write(f"[{timestamp}] {message}\n")
     
     def do_GET(self):
         """Handle GET requests"""
