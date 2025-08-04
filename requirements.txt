@@ -1,7 +1,13 @@
-ollama
-redis
-modelcache
-sentence-transformers
-requests
-fastapi
-uvicorn[standard]
+# Minimal requirements for Claude Code CLI proxy
+# Core web framework
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+
+# HTTP client for API calls
+requests>=2.28.0
+
+# Optional: Redis for caching (can be disabled)
+redis>=4.5.0
+
+# Optional: For local Ollama integration
+# ollama>=0.1.0  # Uncomment if using local models

@@ -9,12 +9,19 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Configuration
-VAST_SSH_HOST="ssh7.vast.ai"
-VAST_SSH_PORT="12806"
-VAST_USER="root"
-LOCAL_PORT="8000"
-VAST_PORT="8000"
+# Load configuration from file
+CONFIG_FILE="$HOME/.claude-proxy-config"
+
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+else
+    # Default configuration
+    VAST_SSH_HOST="${VAST_SSH_HOST:-ssh7.vast.ai}"
+    VAST_SSH_PORT="${VAST_SSH_PORT:-12806}"
+    VAST_USER="${VAST_USER:-root}"
+    LOCAL_PORT="${LOCAL_PORT:-8001}"
+    VAST_PORT="${VAST_PORT:-8000}"
+fi
 
 echo -e "${BLUE}🚀 Claude CLI - Vast.ai Mode${NC}"
 echo "=============================="
