@@ -1,6 +1,6 @@
 # Claude Code CLI Proxy
 
-**Use Claude Code CLI with your own infrastructure instead of Anthropic's servers**
+## Use Claude Code CLI with your own infrastructure instead of Anthropic's servers
 
 This project provides proxies that let you use Claude Code CLI with:
 - 🚀 **Vast.ai GPU instances** running Qwen models
@@ -12,10 +12,12 @@ This project provides proxies that let you use Claude Code CLI with:
 **One-command installation:**
 
 ```bash
-# Download installer and verify SHA256 checksum
+# Download installer
 curl -fsSL -o install-claude-proxy.sh \
   https://raw.githubusercontent.com/jleechanorg/claude_llm_proxy/main/install-claude-proxy.sh
+# Verify checksum (update with actual checksum)
 echo "EXPECTED_SHA256  install-claude-proxy.sh" | sha256sum --check -
+# Execute after verification
 bash install-claude-proxy.sh
 ```
 
@@ -50,13 +52,13 @@ The installer will:
 - **Benefits**: Zero infrastructure, instant setup
 
 ### 3. Local Options
-**A) Ollama**
+#### A) Ollama
 - **Cost**: Free (your hardware)
 - **Model**: qwen3-coder or qwen2.5-coder:7b
 - **Setup**: Installs Ollama locally
 - **Benefits**: Complete privacy, no external calls
 
-**B) LM Studio**
+#### B) LM Studio
 - **Cost**: Free (your hardware)
 - **Model**: Any model you have loaded (supports qwen3-coder-30b)
 - **Setup**: Connects to existing LM Studio installation
@@ -64,7 +66,7 @@ The installer will:
 
 ## Architecture
 
-```
+```mermaid
 Claude CLI → Local Proxy → [Vast.ai/Cerebras/Local] → Response
 ```
 

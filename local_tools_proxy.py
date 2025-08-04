@@ -419,4 +419,4 @@ if __name__ == "__main__":
     print("\nReady for Claude Code CLI integration!")
     print("=" * 40)
     
-    uvicorn.run(app, host="0.0.0.0", port=API_PORT)
+    uvicorn.run(app, host="127.0.0.1", port=API_port)

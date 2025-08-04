@@ -70,7 +70,7 @@ Check if we can reach the vast.ai instance:
 Test SSH tunnel status:
 
 ```bash
-ps aux | grep ssh | grep vast || echo "No SSH tunnel found"
+pgrep -af '[s]sh.*vast' || echo "No SSH tunnel found"
 ```
 
 Check if the vast.ai instance is running:

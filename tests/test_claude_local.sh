@@ -1,5 +1,6 @@
 #!/bin/bash
 # test_claude_local.sh - Automated test runner for claude-local integration
+set -euo pipefail
 
 echo "🧪 Starting Claude-Local Integration Test"
 echo "========================================"

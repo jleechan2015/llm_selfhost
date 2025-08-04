@@ -26,7 +26,8 @@ command_exists() {
 
 check_python() {
     if command_exists python3; then
-        local version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+        local version
+        version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
         echo -e "${GREEN}✅ Python $version found${NC}"
         return 0
     else
@@ -140,6 +141,12 @@ configure_ollama() {
     
     if ! command_exists ollama; then
         echo -e "${BLUE}Installing Ollama...${NC}"
+        echo -e "${YELLOW}⚠️  About to download and run Ollama installer from the internet${NC}"
+        read -p "Continue? (y/N): " confirm
+        if [[ "$confirm" != "y" ]]; then
+            echo "Installation cancelled"
+            exit 1
+        fi
         curl -fsSL https://ollama.com/install.sh | sh
     fi
     
@@ -198,10 +205,8 @@ setup_claude_cli() {
     fi
     
     if [ -n "$SHELL_PROFILE" ]; then
-        echo "" >> "$SHELL_PROFILE"
-        echo "# Claude Code CLI Proxy Configuration" >> "$SHELL_PROFILE"
-        echo "export ANTHROPIC_BASE_URL=\"http://localhost:$LOCAL_PORT\"" >> "$SHELL_PROFILE"
-        echo "export ANTHROPIC_API_KEY=\"dummy\"" >> "$SHELL_PROFILE"
+        grep -qxF 'export ANTHROPIC_BASE_URL=' "$SHELL_PROFILE" || echo 'export ANTHROPIC_BASE_URL="http://localhost:$LOCAL_PORT"' >> "$SHELL_PROFILE"
+        grep -qxF 'export ANTHROPIC_API_KEY=' "$SHELL_PROFILE" || echo 'export ANTHROPIC_API_KEY="dummy"' >> "$SHELL_PROFILE"
         
         echo -e "${GREEN}✅ Environment variables added to $SHELL_PROFILE${NC}"
         echo -e "${YELLOW}Run 'source $SHELL_PROFILE' or restart terminal to apply${NC}"
@@ -213,6 +218,8 @@ create_startup_script() {
     
     cat > claude-proxy-start.sh << 'EOL'
 #!/bin/bash
+set -euo pipefail
+exec >>"$HOME/.claude-proxy.log" 2>&1
 # Claude Proxy Startup Script
 
 CONFIG_FILE="$HOME/.claude-proxy-config"

@@ -38,7 +38,7 @@ git ls-files | grep -v "^${OUTPUT_BASE}_part[0-9]*.txt$" | while read -r filepat
     echo "--- CONTENT ---" >> "$CURRENT_OUTPUT"
 
     # Check if the file is binary using the file command
-    if file "$filepath" | grep -q "text"; then
+    if file --mime-type "$filepath" | grep -q "text/"; then
         # File is text, append the actual content
         cat "$filepath" >> "$CURRENT_OUTPUT"
     else

@@ -1,15 +1,18 @@
 #!/bin/bash
 # run_all_tests.sh - Comprehensive test runner for all Claude Code CLI proxy configurations
+set -euo pipefail
 
 echo "🧪 Claude Code CLI Proxy - Comprehensive Test Suite"
 echo "==================================================="
 echo ""
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Test 1: Claude-Local (LM Studio Integration)
 echo "🏠 Testing Local LM Studio Integration..."
 echo "----------------------------------------"
-if [ -f "test_claude_local.sh" ]; then
-    if ./test_claude_local.sh; then
+if [ -f "${SCRIPT_DIR}/test_claude_local.sh" ]; then
+    if "${SCRIPT_DIR}/test_claude_local.sh"; then
         echo "✅ Claude-Local tests PASSED"
         LOCAL_RESULT="PASSED"
     else
@@ -26,8 +29,8 @@ echo "🚀 Testing Remote Vast.ai Integration..."
 echo "---------------------------------------"
 
 # Test 2: Claude-Vast (Vast.ai Integration) 
-if [ -f "test_claude_vast.sh" ]; then
-    if ./test_claude_vast.sh; then
+if [ -f "${SCRIPT_DIR}/test_claude_vast.sh" ]; then
+    if "${SCRIPT_DIR}/test_claude_vast.sh"; then
         echo "✅ Claude-Vast tests PASSED"
         VAST_RESULT="PASSED"
     else
@@ -44,8 +47,8 @@ echo "🧠 Testing Cerebras Cloud API Integration..."
 echo "------------------------------------------"
 
 # Test 3: Claude-Cerebras (Cerebras Cloud Integration)
-if [ -f "test_claude_cerebras.sh" ]; then
-    if ./test_claude_cerebras.sh; then
+if [ -f "${SCRIPT_DIR}/test_claude_cerebras.sh" ]; then
+    if "${SCRIPT_DIR}/test_claude_cerebras.sh"; then
         echo "✅ Claude-Cerebras tests PASSED"
         CEREBRAS_RESULT="PASSED"
     else

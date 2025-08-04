@@ -1,5 +1,6 @@
 #!/bin/bash
 # test_claude_vast.sh - Automated test runner for claude-vast integration
+set -euo pipefail
 
 echo "🚀 Starting Claude-Vast Integration Test"
 echo "========================================"

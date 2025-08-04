@@ -1,0 +1,13 @@
+{
+  "backend": "vast-ai",
+  "port": 8001,
+  "backends": {
+    "vast-ai": {
+      "type": "self-hosted",
+      "url": "http://localhost:8000",
+      "model": "qwen3-coder",
+      "description": "Vast.ai GPU instance via SSH tunnel"
+    }
+  }
+}
+EOF < /dev/null
