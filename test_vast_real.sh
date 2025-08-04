@@ -24,8 +24,12 @@ echo -e "${GREEN}✅ SSH tunnel active${NC}"
 echo -e "${YELLOW}🔧 Ensuring port 8001 is free...${NC}"
 fuser -k 8001/tcp >/dev/null 2>&1
 
-# Create vast.ai configuration
-echo -e "${BLUE}🔧 Creating vast.ai configuration...${NC}"
+# Set model and API key
+export ANTHROPIC_BASE_URL="http://localhost:8001"
+export ANTHROPIC_API_KEY="dummy"
+export VAST_MODEL=${VAST_MODEL:-"qwen3-coder"}
+
+echo -e "${BLUE}🔧 Creating vast.ai configuration for model: ${YELLOW}$VAST_MODEL${NC}"
 cat > .llmrc.json << EOF
 {
   "backend": "vast-ai",
@@ -34,7 +38,7 @@ cat > .llmrc.json << EOF
     "vast-ai": {
       "type": "self-hosted",
       "url": "http://localhost:8000",
-      "model": "qwen3-coder",
+      "model": "$VAST_MODEL",
       "description": "Vast.ai GPU instance via SSH tunnel"
     }
   }
@@ -65,11 +69,9 @@ fi
 
 # Test end-to-end with Claude CLI
 echo -e "${BLUE}🤖 Testing Claude CLI with real vast.ai backend...${NC}"
-export ANTHROPIC_BASE_URL="http://localhost:8001"
-export ANTHROPIC_API_KEY="dummy"
 
 echo -e "${BLUE}Sending: Write a Python function to calculate factorial${NC}"
-CLAUDE_RESPONSE=$(timeout 60 claude --model qwen3-coder "Write a Python function to calculate factorial of a number. Just show the code." 2>&1)
+CLAUDE_RESPONSE=$(timeout 60 claude --model "$VAST_MODEL" "Write a Python function to calculate factorial of a number. Just show the code." 2>&1)
 
 echo ""
 echo "=== Claude Response ==="
@@ -89,7 +91,7 @@ fi
 echo -e "${BLUE}🔍 Testing direct API call...${NC}"
 DIRECT_RESPONSE=$(curl -s -X POST http://localhost:8001/v1/messages \
   -H "Content-Type: application/json" \
-  -d '{"model": "qwen3-coder", "messages": [{"role": "user", "content": "Write a Python function to calculate factorial of a number. Just show the code."}], "max_tokens": 150}')
+  -d '{"model": "'"$VAST_MODEL"'", "messages": [{"role": "user", "content": "Write a Python function to calculate factorial of a number. Just show the code."}], "max_tokens": 150}')
 
 echo "Direct API response preview:"
 echo "$DIRECT_RESPONSE" | head -c 200

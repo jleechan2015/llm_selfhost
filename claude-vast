@@ -105,17 +105,18 @@ main() {
     
     # Set environment and run Claude
     export ANTHROPIC_BASE_URL="http://localhost:${LOCAL_PORT}"
+    export VAST_MODEL=${VAST_MODEL:-"qwen3-coder"}
     
     # Pass all arguments to claude
     if [ $# -eq 0 ]; then
         echo -e "${BLUE}🤖 Starting Claude in interactive mode...${NC}"
         echo -e "${YELLOW}⏱️  Note: First response may take 30-60 seconds${NC}"
         echo ""
-        claude --model qwen3-coder --dangerously-skip-permissions
+        claude --model "$VAST_MODEL" --dangerously-skip-permissions
     else
         echo -e "${BLUE}🤖 Running Claude with arguments: $*${NC}"
         echo ""
-        claude --model qwen3-coder --dangerously-skip-permissions "$@"
+        claude --model "$VAST_MODEL" --dangerously-skip-permissions "$@"
     fi
 }
 
