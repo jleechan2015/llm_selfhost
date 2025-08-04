@@ -1,0 +1,380 @@
+#!/bin/bash
+# Claude CLI with Local LM Studio Integration
+# Auto-discovers LM Studio on Windows host from WSL
+# Usage: ./claude-local [claude options]
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo -e "${BLUE}🏠 Claude CLI - Local LM Studio Mode${NC}"
+echo "========================================="
+
+# Configuration
+LM_STUDIO_PORT="${LM_STUDIO_PORT:-1234}"
+LM_STUDIO_MODEL="${LM_STUDIO_MODEL:-qwen/qwen3-coder-30b}"
+
+# Discover Windows host IP from WSL
+discover_host() {
+    echo -e "${BLUE}🔍 Discovering Windows host from WSL...${NC}"
+    
+    # Check if we're in WSL
+    if ! grep -q microsoft /proc/version 2>/dev/null; then
+        echo -e "${YELLOW}⚠️  Not running in WSL, trying localhost...${NC}"
+        echo "localhost"
+        return 0
+    fi
+    
+    # Get default gateway (Windows host IP)
+    HOST_IP=$(ip route show | grep -i default | awk '{ print $3 }' | head -1)
+    
+    if [ -z "$HOST_IP" ]; then
+        echo -e "${RED}❌ Could not discover Windows host IP${NC}"
+        echo -e "${YELLOW}💡 Trying localhost as fallback...${NC}"
+        echo "localhost"
+        return 1
+    fi
+    
+    echo -e "${GREEN}✅ Found Windows host: $HOST_IP${NC}"
+    echo "$HOST_IP"
+    return 0
+}
+
+# Check if LM Studio is running and accessible
+check_lm_studio() {
+    local host=$1
+    local port=$2
+    
+    echo -e "${BLUE}🔍 Checking LM Studio at ${host}:${port}...${NC}"
+    
+    # Test basic connectivity
+    if ! curl -s --connect-timeout 5 "http://${host}:${port}/v1/models" >/dev/null 2>&1; then
+        echo -e "${RED}❌ Cannot connect to LM Studio${NC}"
+        return 1
+    fi
+    
+    # Get models list
+    MODELS_RESPONSE=$(curl -s --connect-timeout 10 "http://${host}:${port}/v1/models" 2>/dev/null)
+    
+    if [ $? -ne 0 ] || [ -z "$MODELS_RESPONSE" ]; then
+        echo -e "${RED}❌ LM Studio not responding properly${NC}"
+        return 1
+    fi
+    
+    # Check if our expected model is loaded
+    if echo "$MODELS_RESPONSE" | grep -q "qwen"; then
+        MODEL_NAME=$(echo "$MODELS_RESPONSE" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    models = [m['id'] for m in data.get('data', [])]
+    qwen_models = [m for m in models if 'qwen' in m.lower()]
+    print(qwen_models[0] if qwen_models else 'unknown')
+except:
+    print('unknown')
+" 2>/dev/null)
+        
+        echo -e "${GREEN}✅ LM Studio is running${NC}"
+        echo -e "${GREEN}📱 Available model: $MODEL_NAME${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}⚠️  LM Studio running but no Qwen model loaded${NC}"
+        echo -e "${BLUE}Available models:${NC}"
+        echo "$MODELS_RESPONSE" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    for model in data.get('data', []):
+        print(f\"  - {model['id']}\")
+except:
+    print('  Unable to parse models')
+" 2>/dev/null
+        return 1
+    fi
+}
+
+# Test LM Studio connection with a simple query
+test_lm_studio() {
+    local host=$1
+    local port=$2
+    local model=$3
+    
+    echo -e "${BLUE}🧪 Testing LM Studio with simple query...${NC}"
+    
+    # Simple test query
+    local test_response=$(curl -s --connect-timeout 15 \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer lm-studio" \
+        -d "{
+            \"model\": \"$model\",
+            \"messages\": [{\"role\": \"user\", \"content\": \"Say 'Hello from LM Studio!' and nothing else.\"}],
+            \"max_tokens\": 20,
+            \"temperature\": 0.1
+        }" \
+        "http://${host}:${port}/v1/chat/completions" 2>/dev/null)
+    
+    if [ $? -eq 0 ] && echo "$test_response" | grep -q "Hello from LM Studio"; then
+        echo -e "${GREEN}✅ LM Studio test successful${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}⚠️  LM Studio test failed or unexpected response${NC}"
+        echo "Response: $test_response"
+        return 1
+    fi
+}
+
+# Create local proxy for Claude CLI integration
+start_local_proxy() {
+    local host=$1
+    local port=$2
+    local model=$3
+    
+    echo -e "${BLUE}🚀 Starting local proxy for Claude CLI integration...${NC}"
+    
+    # Check if proxy is already running
+    if curl -s http://localhost:8001/health >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Local proxy already running${NC}"
+        return 0
+    fi
+    
+    # Create temporary proxy script
+    cat > /tmp/lm_studio_proxy.py << EOF
+#!/usr/bin/env python3
+"""
+LM Studio Proxy for Claude CLI Integration
+Translates Anthropic API calls to LM Studio OpenAI-compatible API
+"""
+
+import json
+import requests
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
+import uvicorn
+import time
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="LM Studio Proxy", version="1.0.0")
+
+# Configuration
+LM_STUDIO_HOST = "${host}"
+LM_STUDIO_PORT = ${port}
+LM_STUDIO_MODEL = "${model}"
+LM_STUDIO_BASE_URL = f"http://{LM_STUDIO_HOST}:{LM_STUDIO_PORT}/v1"
+
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
+    try:
+        # Test LM Studio connection
+        response = requests.get(f"{LM_STUDIO_BASE_URL}/models", timeout=5)
+        if response.status_code == 200:
+            return {
+                "status": "healthy",
+                "lm_studio_proxy": "active",
+                "lm_studio_host": f"{LM_STUDIO_HOST}:{LM_STUDIO_PORT}",
+                "model": LM_STUDIO_MODEL,
+                "timestamp": time.time()
+            }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+    
+    raise HTTPException(status_code=503, detail="LM Studio not accessible")
+
+@app.get("/v1/models")
+async def list_models():
+    """List available models"""
+    try:
+        response = requests.get(f"{LM_STUDIO_BASE_URL}/models", timeout=10)
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to get models: {e}")
+        raise HTTPException(status_code=503, detail="LM Studio not accessible")
+
+@app.post("/v1/messages")
+async def create_message(request: Request):
+    """Handle Anthropic-style messages and convert to OpenAI format"""
+    try:
+        data = await request.json()
+        logger.info(f"Received Claude request: {json.dumps(data, indent=2)}")
+        
+        # Convert Anthropic format to OpenAI format
+        openai_request = {
+            "model": LM_STUDIO_MODEL,
+            "messages": data.get("messages", []),
+            "max_tokens": data.get("max_tokens", 1000),
+            "temperature": data.get("temperature", 0.7),
+            "stream": False  # Claude CLI expects non-streaming
+        }
+        
+        # Make request to LM Studio
+        response = requests.post(
+            f"{LM_STUDIO_BASE_URL}/chat/completions",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer lm-studio"
+            },
+            json=openai_request,
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"LM Studio error: {response.status_code} - {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=response.text)
+        
+        openai_response = response.json()
+        logger.info(f"LM Studio response: {json.dumps(openai_response, indent=2)}")
+        
+        # Convert OpenAI response to Anthropic format
+        content = openai_response["choices"][0]["message"]["content"]
+        
+        anthropic_response = {
+            "id": f"msg_{int(time.time())}",
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "text", "text": content}],
+            "model": LM_STUDIO_MODEL,
+            "stop_reason": "end_turn",
+            "stop_sequence": None,
+            "usage": {
+                "input_tokens": openai_response.get("usage", {}).get("prompt_tokens", 0),
+                "output_tokens": openai_response.get("usage", {}).get("completion_tokens", 0)
+            }
+        }
+        
+        return anthropic_response
+        
+    except Exception as e:
+        logger.error(f"Error processing request: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")
+EOF
+    
+    # Start proxy in background
+    echo -e "${BLUE}⏳ Starting proxy server...${NC}"
+    python3 /tmp/lm_studio_proxy.py > /tmp/lm_studio_proxy.log 2>&1 &
+    PROXY_PID=$!
+    
+    # Wait for proxy to start
+    for i in {1..10}; do
+        sleep 1
+        if curl -s http://localhost:8001/health >/dev/null 2>&1; then
+            echo -e "${GREEN}✅ Local proxy started successfully (PID: $PROXY_PID)${NC}"
+            return 0
+        fi
+    done
+    
+    echo -e "${RED}❌ Failed to start local proxy${NC}"
+    echo "Check /tmp/lm_studio_proxy.log for details"
+    return 1
+}
+
+# Main function
+main() {
+    # Step 1: Discover Windows host
+    HOST_IP=$(discover_host)
+    if [ $? -ne 0 ]; then
+        echo -e "${YELLOW}⚠️  Host discovery issues, trying localhost${NC}"
+        HOST_IP="localhost"
+    fi
+    
+    # Step 2: Check LM Studio
+    if ! check_lm_studio "$HOST_IP" "$LM_STUDIO_PORT"; then
+        echo -e "${RED}❌ LM Studio not accessible${NC}"
+        echo -e "${YELLOW}💡 Make sure LM Studio is running on Windows with a model loaded${NC}"
+        echo -e "${YELLOW}💡 Check that LM Studio server is enabled (port $LM_STUDIO_PORT)${NC}"
+        exit 1
+    fi
+    
+    # Step 3: Get the actual model name
+    ACTUAL_MODEL=$(curl -s "http://${HOST_IP}:${LM_STUDIO_PORT}/v1/models" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    models = [m['id'] for m in data.get('data', [])]
+    print(models[0] if models else 'unknown')
+except:
+    print('unknown')
+" 2>/dev/null)
+    
+    if [ "$ACTUAL_MODEL" != "unknown" ]; then
+        LM_STUDIO_MODEL="$ACTUAL_MODEL"
+        echo -e "${GREEN}✅ Using model: $LM_STUDIO_MODEL${NC}"
+    fi
+    
+    # Step 4: Test connection
+    if ! test_lm_studio "$HOST_IP" "$LM_STUDIO_PORT" "$LM_STUDIO_MODEL"; then
+        echo -e "${YELLOW}⚠️  Basic test failed, but continuing anyway...${NC}"
+    fi
+    
+    # Step 5: Start local proxy
+    if ! start_local_proxy "$HOST_IP" "$LM_STUDIO_PORT" "$LM_STUDIO_MODEL"; then
+        echo -e "${RED}❌ Failed to start local proxy${NC}"
+        exit 1
+    fi
+    
+    echo ""
+    echo -e "${GREEN}🎯 Ready to use Claude with LM Studio!${NC}"
+    echo -e "${BLUE}🏠 LM Studio: http://${HOST_IP}:${LM_STUDIO_PORT}${NC}"
+    echo -e "${BLUE}🔗 Proxy: http://localhost:8001${NC}"
+    echo -e "${BLUE}📱 Model: ${LM_STUDIO_MODEL}${NC}"
+    echo ""
+    
+    # Set environment and run Claude
+    export ANTHROPIC_BASE_URL="http://localhost:8001"
+    export ANTHROPIC_API_KEY="lm-studio"
+    
+    # Pass all arguments to claude
+    if [ $# -eq 0 ]; then
+        echo -e "${BLUE}🤖 Starting Claude in interactive mode...${NC}"
+        echo -e "${YELLOW}⏱️  Note: First response may take 10-30 seconds${NC}"
+        echo ""
+        claude
+    else
+        echo -e "${BLUE}🤖 Running Claude with arguments: $*${NC}"
+        echo ""
+        claude "$@"
+    fi
+}
+
+# Help message
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    echo "Claude CLI with Local LM Studio Integration"
+    echo ""
+    echo "What it does:"
+    echo "  1. 🔍 Auto-discovers Windows host IP from WSL"
+    echo "  2. ✅ Validates LM Studio is running and accessible"
+    echo "  3. 🚀 Starts local proxy to translate Anthropic↔OpenAI API formats"
+    echo "  4. 🤖 Runs Claude CLI with proper configuration"
+    echo ""
+    echo "Usage:"
+    echo "  ./claude-local                    # Interactive mode"
+    echo "  ./claude-local -p \"prompt\"        # Direct prompt"
+    echo "  ./claude-local --help             # Show this help"
+    echo ""
+    echo "Configuration:"
+    echo "  LM_STUDIO_PORT=${LM_STUDIO_PORT} (default: 1234)"
+    echo "  LM_STUDIO_MODEL=${LM_STUDIO_MODEL}"
+    echo ""
+    echo "Requirements:"
+    echo "  - LM Studio running on Windows with server enabled"
+    echo "  - Qwen model loaded in LM Studio"
+    echo "  - Python 3 with fastapi, uvicorn, requests installed"
+    echo ""
+    echo "Troubleshooting:"
+    echo "  - Ensure LM Studio server is enabled (Local Server tab)"
+    echo "  - Check Windows Firewall allows port ${LM_STUDIO_PORT}"
+    echo "  - Verify WSL can reach Windows host"
+    exit 0
+fi
+
+# Run main function
+main "$@"

@@ -113,6 +113,28 @@ EOF
 
 configure_local() {
     echo -e "${YELLOW}🏠 Local Configuration${NC}"
+    echo "Choose local backend:"
+    echo "1) Ollama (download and install models locally)"
+    echo "2) LM Studio (use existing LM Studio on Windows/macOS)"
+    echo ""
+    read -p "Enter choice (1-2): " LOCAL_CHOICE
+    
+    case $LOCAL_CHOICE in
+        1)
+            configure_ollama
+            ;;
+        2)
+            configure_lm_studio
+            ;;
+        *)
+            echo -e "${RED}❌ Invalid choice${NC}"
+            exit 1
+            ;;
+    esac
+}
+
+configure_ollama() {
+    echo -e "${YELLOW}🦙 Ollama Configuration${NC}"
     
     if ! command_exists ollama; then
         echo -e "${BLUE}Installing Ollama...${NC}"
@@ -124,12 +146,35 @@ configure_local() {
     
     # Save configuration
     cat > "$CONFIG_FILE" << EOF
-BACKEND=local
+BACKEND=ollama
 OLLAMA_HOST=localhost:11434
 LOCAL_PORT=8001
 EOF
     
-    echo -e "${GREEN}✅ Local configuration saved${NC}"
+    echo -e "${GREEN}✅ Ollama configuration saved${NC}"
+}
+
+configure_lm_studio() {
+    echo -e "${YELLOW}🏠 LM Studio Configuration${NC}"
+    echo "This will connect to LM Studio running on your Windows/macOS host"
+    echo ""
+    
+    read -p "LM Studio port (default: 1234): " LM_PORT
+    LM_PORT=${LM_PORT:-1234}
+    
+    read -p "Expected model name (default: auto-detect): " LM_MODEL
+    LM_MODEL=${LM_MODEL:-auto-detect}
+    
+    # Save configuration
+    cat > "$CONFIG_FILE" << EOF
+BACKEND=lmstudio
+LM_STUDIO_PORT=$LM_PORT
+LM_STUDIO_MODEL=$LM_MODEL
+LOCAL_PORT=8001
+EOF
+    
+    echo -e "${GREEN}✅ LM Studio configuration saved${NC}"
+    echo -e "${YELLOW}Note: Make sure LM Studio server is enabled with a model loaded${NC}"
 }
 
 setup_claude_cli() {
@@ -189,11 +234,17 @@ case $BACKEND in
         export CEREBRAS_API_KEY="$CEREBRAS_API_KEY"
         python3 cerebras_proxy.py
         ;;
-    local)
-        echo "🏠 Starting local proxy..."
+    ollama)
+        echo "🦙 Starting Ollama proxy..."
         ollama serve &
         sleep 5
         python3 claude_code_tools_proxy.py
+        ;;
+    lmstudio)
+        echo "🏠 Starting LM Studio proxy..."
+        export LM_STUDIO_PORT="$LM_STUDIO_PORT"
+        export LM_STUDIO_MODEL="$LM_STUDIO_MODEL"
+        ./claude-local
         ;;
 esac
 EOL

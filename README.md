@@ -45,11 +45,18 @@ The installer will:
 - **Setup**: Just need API key
 - **Benefits**: Zero infrastructure, instant setup
 
-### 3. Local Ollama
+### 3. Local Options
+**A) Ollama**
 - **Cost**: Free (your hardware)
 - **Model**: qwen3-coder or qwen2.5-coder:7b
 - **Setup**: Installs Ollama locally
 - **Benefits**: Complete privacy, no external calls
+
+**B) LM Studio**
+- **Cost**: Free (your hardware)
+- **Model**: Any model you have loaded (supports qwen3-coder-30b)
+- **Setup**: Connects to existing LM Studio installation
+- **Benefits**: Use powerful models, familiar GUI, WSL support
 
 ## Architecture
 
@@ -68,8 +75,9 @@ The proxy translates between:
 - **`claude_code_tools_proxy.py`** - Tool-enabled proxy with full CLI support
 - **`cerebras_proxy.py`** - Cerebras Cloud integration  
 - **`simple_api_proxy.py`** - Lightweight vast.ai proxy
+- **`claude-vast`** - SSH tunnel management and auto-startup for vast.ai
+- **`claude-local`** - LM Studio integration with WSL host discovery
 - **`install-claude-proxy.sh`** - Unified installer script
-- **`claude-vast`** - SSH tunnel management for vast.ai
 
 ## Manual Usage
 
@@ -78,8 +86,15 @@ After installation, start your proxy:
 ./claude-proxy-start.sh
 ```
 
-Then use Claude CLI normally:
+Or use dedicated commands:
 ```bash
+# For vast.ai (auto-starts server if needed)
+./claude-vast "help me debug this Python script"
+
+# For LM Studio (auto-discovers Windows host in WSL)
+./claude-local "help me debug this Python script"
+
+# Or use Claude CLI normally after starting proxy
 claude "help me debug this Python script"
 ```
 
@@ -96,7 +111,8 @@ export ANTHROPIC_API_KEY="dummy"
 - Python 3.8+
 - For Vast.ai: SSH access to your instance
 - For Cerebras: API key
-- For Local: ~8GB RAM for smaller models
+- For Ollama: ~8GB RAM for smaller models
+- For LM Studio: LM Studio running with server enabled and model loaded
 
 ## Cost Comparison
 
@@ -105,7 +121,8 @@ export ANTHROPIC_API_KEY="dummy"
 | Anthropic Claude | $15/1M tokens | N/A | Instant |
 | Vast.ai RTX 4090 | ~$0.50/hour | 30B | 5 min |
 | Cerebras Cloud | ~$1/1M tokens | 480B | 1 min |
-| Local | Free | 7B-30B | 10 min |
+| Local Ollama | Free | 7B-30B | 10 min |
+| LM Studio | Free | 7B-405B | 2 min |
 
 ## Security
 
