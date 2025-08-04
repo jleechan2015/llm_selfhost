@@ -103,7 +103,7 @@ start_remote_server() {
     # Check if startup script exists
     STARTUP_CHECK=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                    -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} \
-                   "ls -la startup_llm.sh vast_tools_proxy.py 2>/dev/null" 2>/dev/null)
+                   "ls -la startup_llm.sh vast_tools_proxy.py claude_tools_base.py 2>/dev/null" 2>/dev/null)
     
     if [[ -z "$STARTUP_CHECK" ]]; then
         echo -e "${YELLOW}⚠️  Startup scripts not found on remote instance${NC}"
@@ -111,7 +111,7 @@ start_remote_server() {
         
         # Copy essential files to remote instance (including tools-enabled proxy)
         scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            -P ${VAST_SSH_PORT} startup_llm.sh vast_tools_proxy.py requirements.txt \
+            -P ${VAST_SSH_PORT} startup_llm.sh vast_tools_proxy.py claude_tools_base.py requirements.txt \
             ${VAST_USER}@${VAST_SSH_HOST}:~/ 2>/dev/null
         
         if [ $? -ne 0 ]; then
@@ -240,7 +240,7 @@ if [[ "$1" == "--help" || "$1" == "-h" ]]; then
     echo "Requirements:"
     echo "  - SSH access to vast.ai instance"
     echo "  - Vast.ai instance with basic Python/curl installed"
-    echo "  - Local files: startup_llm.sh, simple_api_proxy.py, requirements.txt"
+    echo "  - Local files: startup_llm.sh, vast_tools_proxy.py, claude_tools_base.py, requirements.txt"
     exit 0
 fi
 

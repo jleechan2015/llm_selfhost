@@ -1,0 +1,9 @@
+# Claude Proxy Configuration for Vast.ai
+# Update these values for your specific vast.ai instance
+
+VAST_SSH_HOST="ssh7.vast.ai"
+VAST_SSH_PORT="12806"
+VAST_USER="root"
+LOCAL_PORT="8000"
+VAST_PORT="8000"
+VAST_MODEL="qwen3-coder"

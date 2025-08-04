@@ -28,8 +28,8 @@ class ClaudeCodeTools:
         # Security checks
         dangerous_commands = [
             'rm -rf /', 'rm -rf *', 'format', 'fdisk', 'mkfs',
-            'dd if=', ':(){ :|:& };:', 'chmod -R 777 /',
-            'chown -R', 'passwd', 'sudo su', 'su -',
+            'dd if=', ':(){ :|:& };:', 'chmod -r 777 /',
+            'chown -r', 'passwd', 'sudo su', 'su -',
             'curl http://169.254.169.254'  # Block metadata access
         ]
         
