@@ -20,25 +20,12 @@ fi
 
 echo -e "${GREEN}✅ SSH tunnel active${NC}"
 
+# Kill any existing process on port 8001
+echo -e "${YELLOW}🔧 Ensuring port 8001 is free...${NC}"
+fuser -k 8001/tcp >/dev/null 2>&1
+
 # Create vast.ai configuration
 echo -e "${BLUE}🔧 Creating vast.ai configuration...${NC}"
-cat > .llmrc.json << EOF
-{
-  "backend": "vast-ai",
-  "port": "auto",
-  "backends": {
-    "vast-ai": {
-      "type": "self-hosted",
-      "url": "http://localhost:8000",
-      "description": "Vast.ai GPU instance via SSH tunnel"
-    }
-  }
-}
-EOF
-chmod 600 .llmrc.json
-
-# Start our proxy server (on different port to avoid conflict)
-echo -e "${BLUE}🚀 Starting local proxy server...${NC}"
 cat > .llmrc.json << EOF
 {
   "backend": "vast-ai",
@@ -47,12 +34,16 @@ cat > .llmrc.json << EOF
     "vast-ai": {
       "type": "self-hosted",
       "url": "http://localhost:8000",
+      "model": "qwen3-coder",
       "description": "Vast.ai GPU instance via SSH tunnel"
     }
   }
 }
 EOF
+chmod 600 .llmrc.json
 
+# Start our proxy server
+echo -e "${BLUE}🚀 Starting local proxy server...${NC}"
 node ./bin/llm-proxy.js start &
 LOCAL_PROXY_PID=$!
 
@@ -75,9 +66,10 @@ fi
 # Test end-to-end with Claude CLI
 echo -e "${BLUE}🤖 Testing Claude CLI with real vast.ai backend...${NC}"
 export ANTHROPIC_BASE_URL="http://localhost:8001"
+export ANTHROPIC_API_KEY="dummy"
 
 echo -e "${BLUE}Sending: Write a Python function to calculate factorial${NC}"
-CLAUDE_RESPONSE=$(timeout 60 claude --verbose -p "Write a Python function to calculate factorial of a number. Just show the code." 2>&1)
+CLAUDE_RESPONSE=$(timeout 60 claude --model qwen3-coder "Write a Python function to calculate factorial of a number. Just show the code." 2>&1)
 
 echo ""
 echo "=== Claude Response ==="
@@ -95,13 +87,12 @@ fi
 
 # Test direct API call to vast.ai
 echo -e "${BLUE}🔍 Testing direct API call...${NC}"
-DIRECT_RESPONSE=$(curl -X POST http://localhost:8001/v1/messages \
+DIRECT_RESPONSE=$(curl -s -X POST http://localhost:8001/v1/messages \
   -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Write def fibonacci(n): in Python"}], "max_tokens": 100}' \
-  2>/dev/null)
+  -d '{"model": "qwen3-coder", "messages": [{"role": "user", "content": "Write a Python function to calculate factorial of a number. Just show the code."}], "max_tokens": 150}')
 
 echo "Direct API response preview:"
-echo "$DIRECT_RESPONSE" | head -3
+echo "$DIRECT_RESPONSE" | head -c 200
 
 # Cleanup
 echo -e "${BLUE}🧹 Cleaning up...${NC}"
