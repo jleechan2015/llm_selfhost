@@ -29,8 +29,8 @@ from claude_tools_base import ToolExecutionMixin
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-print("🧠 Starting Tool-Enabled Cerebras Proxy Server...")
-print("=" * 50)
+logger.info("🧠 Starting Tool-Enabled Cerebras Proxy Server...")
+logger.info("=" * 50)
 
 # Environment variables
 CEREBRAS_API_KEY = os.getenv('CEREBRAS_API_KEY')
@@ -39,20 +39,20 @@ DEFAULT_MODEL = "qwen-3-coder-480b"
 API_PORT = int(os.getenv('PORT', 8002))
 
 if not CEREBRAS_API_KEY:
-    print("❌ CEREBRAS_API_KEY environment variable not set")
-    print("💡 Get your API key from: https://inference.cerebras.ai/")
+    logger.error("❌ CEREBRAS_API_KEY environment variable not set")
+    logger.error("💡 Get your API key from: https://inference.cerebras.ai/")
     sys.exit(1)
 
-print(f"✅ Cerebras API key configured")
-print(f"🌐 Cerebras API: {CEREBRAS_BASE_URL}")
-print(f"📱 Model: {DEFAULT_MODEL}")
+logger.info(f"✅ Cerebras API key configured")
+logger.info(f"🌐 Cerebras API: {CEREBRAS_BASE_URL}")
+logger.info(f"📱 Model: {DEFAULT_MODEL}")
 
 class CerebrasToolsProxy(ToolExecutionMixin):
     """Cerebras proxy with tool execution capabilities"""
     
     def __init__(self):
         super().__init__()
-        print(f"🧠 Cerebras Tools Proxy initialized with session: {self.tools.session_id}")
+        logger.info(f"🧠 Cerebras Tools Proxy initialized with session: {self.tools.session_id}")
 
 # Legacy class name for compatibility
 class ClaudeCodeTools:
@@ -61,7 +61,7 @@ class ClaudeCodeTools:
     def __init__(self):
         self.temp_files = {}
         self.session_id = str(uuid.uuid4())
-        print(f"🔧 Tools session: {self.session_id}")
+        logger.info(f"🔧 Tools session: {self.session_id}")
         
     def bash(self, command: str) -> Dict[str, Any]:
         """Execute bash commands with security checks"""
@@ -85,7 +85,7 @@ class ClaudeCodeTools:
                 }
         
         try:
-            print(f"🔧 Executing bash: {command}")
+            logger.info(f"🔧 Executing bash: {command}")
             
             # Limit command length
             if len(command) > 1000:
@@ -106,7 +106,7 @@ class ClaudeCodeTools:
                 env=dict(os.environ, PATH=os.environ.get('PATH', ''))
             )
             
-            print(f"✅ Bash result: exit_code={result.returncode}")
+            logger.info(f"✅ Bash result: exit_code={result.returncode}")
             
             return {
                 "type": "bash",
@@ -136,16 +136,16 @@ class ClaudeCodeTools:
         
         if command == "create":
             try:
-                print(f"📝 Creating file: {path}")
+                logger.info(f"📝 Creating file: {path}")
                 with open(path, 'w') as f:
                     f.write(file_text or "")
-                print(f"✅ File created successfully: {path}")
+                logger.info(f"✅ File created successfully: {path}")
                 return {
                     "type": "str_replace_editor",
                     "result": f"File created successfully at: {path}"
                 }
             except Exception as e:
-                print(f"❌ Failed to create file {path}: {e}")
+                logger.error(f"❌ Failed to create file {path}: {e}")
                 return {
                     "type": "str_replace_editor",
                     "error": f"Failed to create file: {str(e)}"
@@ -187,7 +187,7 @@ class ClaudeCodeTools:
                 with open(path, 'w') as f:
                     f.write(new_content)
                 
-                print(f"✅ String replaced in {path}")
+                logger.info(f"✅ String replaced in {path}")
                 return {
                     "type": "str_replace_editor",
                     "result": f"String replaced successfully in {path}"
@@ -203,16 +203,16 @@ class ClaudeCodeTools:
     def write_file(self, path: str, content: str) -> Dict[str, Any]:
         """Direct file write tool for Claude Code CLI compatibility"""
         try:
-            print(f"📝 Writing file: {path}")
+            logger.info(f"📝 Writing file: {path}")
             with open(path, 'w') as f:
                 f.write(content)
-            print(f"✅ File written successfully: {path}")
+            logger.info(f"✅ File written successfully: {path}")
             return {
                 "type": "write_file",
                 "result": f"File written successfully at: {path}"
             }
         except Exception as e:
-            print(f"❌ Failed to write file {path}: {e}")
+            logger.error(f"❌ Failed to write file {path}: {e}")
             return {
                 "type": "write_file",
                 "error": f"Failed to write file: {str(e)}"
@@ -370,7 +370,7 @@ async def create_message(request: Request):
         request_data = await request.json()
         messages = request_data.get("messages", [])
         
-        print(f"📨 Request: {len(messages)} messages")
+        logger.info(f"📨 Request: {len(messages)} messages")
         
         # Forward to Cerebras API
         try:
@@ -403,7 +403,7 @@ You have access to bash execution and file operations."""
                 "stream": False
             }
             
-            print(f"🔄 Forwarding to Cerebras: {CEREBRAS_BASE_URL}")
+            logger.info(f"🔄 Forwarding to Cerebras: {CEREBRAS_BASE_URL}")
             
             # Make request with retry logic
             def make_request():
@@ -451,7 +451,7 @@ You have access to bash execution and file operations."""
             
             # Check if we should execute tools
             if should_use_tools(content):
-                print("🔧 Tool execution triggered")
+                logger.info("🔧 Tool execution triggered")
                 
                 # Extract and execute tools
                 tool_requests = extract_tool_requests(content)
@@ -461,28 +461,28 @@ You have access to bash execution and file operations."""
                     # Enhance response with tool results
                     enhanced_content = content + tool_results
                     anthropic_response["content"][0]["text"] = enhanced_content
-                    print(f"✅ Tools executed: {len(tool_requests)} operations")
+                    logger.info(f"✅ Tools executed: {len(tool_requests)} operations")
             
-            print(f"✅ Response ready ({len(content)} chars)")
+            logger.info(f"✅ Response ready ({len(content)} chars)")
             return JSONResponse(anthropic_response)
             
         except requests.exceptions.RequestException as e:
-            print(f"❌ Cerebras request failed: {e}")
+            logger.error(f"❌ Cerebras request failed: {e}")
             raise HTTPException(status_code=503, detail=f"Cerebras service unavailable: {str(e)}")
             
     except Exception as e:
-        print(f"❌ Error processing request: {e}")
+        logger.error(f"❌ Error processing request: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    print("\n🧠 Tool-Enabled Cerebras Proxy Server")
-    print("=" * 40)
-    print(f"🌐 Port: {API_PORT}")
-    print(f"🤖 Cerebras: {CEREBRAS_BASE_URL}")
-    print(f"📱 Model: {DEFAULT_MODEL}")
-    print(f"🔧 Tools: bash, str_replace_editor, write_file")
-    print("\nReady for Claude Code CLI integration!")
-    print("=" * 40)
+    logger.info("\n🧠 Tool-Enabled Cerebras Proxy Server")
+    logger.info("=" * 40)
+    logger.info(f"🌐 Port: {API_PORT}")
+    logger.info(f"🤖 Cerebras: {CEREBRAS_BASE_URL}")
+    logger.info(f"📱 Model: {DEFAULT_MODEL}")
+    logger.info(f"🔧 Tools: bash, str_replace_editor, write_file")
+    logger.info("\nReady for Claude Code CLI integration!")
+    logger.info("=" * 40)
     
     uvicorn.run(app, host="0.0.0.0", port=API_PORT)

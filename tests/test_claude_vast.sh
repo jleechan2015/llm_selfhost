@@ -25,13 +25,12 @@ echo "✅ Vast.ai instance accessible"
 echo "🤖 Running LLM file operation test on remote GPU..."
 timeout 120s ../claude-vast "Create a file called 'vast_integration_test.txt' with the content 'Vast.ai LLM integration successful!' and then immediately delete it. Confirm both the creation and deletion worked."
 
-# Validate file was properly deleted (proving both creation and deletion worked)
-if [ -f "vast_integration_test.txt" ]; then
-    echo "❌ LLM failed to properly delete test file"
-    rm -f vast_integration_test.txt  # Manual cleanup as fallback
+# Validate remotely
+if ssh "$VAST_SSH_TARGET" "[ -f vast_integration_test.txt ]"; then
+    echo "❌ Remote file still exists – deletion failed"
     exit 1
 else
-    echo "✅ LLM successfully created and deleted test file on remote GPU"
+    echo "✅ Remote file correctly removed"
 fi
 
 # Test 4: Advanced GPU Script Test  

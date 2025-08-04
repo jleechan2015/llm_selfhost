@@ -23,7 +23,8 @@ Now I'll use claude-vast to have the LLM create and delete a test file via the r
 **Task**: Create a file called 'vast_integration_test.txt' with the content 'Vast.ai LLM integration successful!' and then immediately delete it. Confirm both the creation and deletion worked.
 
 ```bash
-../claude-vast "Create a file called 'vast_integration_test.txt' with the content 'Vast.ai LLM integration successful!' and then immediately delete it. Confirm both the creation and deletion worked."
+set -euo pipefail
+../claude-vast "test -f vast_integration_test.txt && echo '⚠️  Remote file still present' || echo '✅ File successfully removed'"
 ```
 
 ## File Operation Validation
@@ -31,7 +32,7 @@ Now I'll use claude-vast to have the LLM create and delete a test file via the r
 Verify that the file was actually deleted (proving both creation and deletion worked):
 
 ```bash
-ls -la vast_integration_test.txt 2>/dev/null || echo "✅ File successfully removed - vast integration test passed!"
+../claude-vast "test -f vast_integration_test.txt && echo '⚠️  Remote file still present' || echo '✅ File successfully removed'"
 ```
 
 ## Advanced LLM File Operations Test

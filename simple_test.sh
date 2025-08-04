@@ -12,7 +12,7 @@ NC='\033[0m'
 source ~/.bashrc
 
 # Explicitly set the API key in case of sourcing issues
-export CEREBRAS_API_KEY="csk-r3ccctjjpfx53m5nnr2y3v9rv954vcy5e59mmx4w3cxyfejn"
+export CEREBRAS_API_KEY="${CEREBRAS_API_KEY:?Please set the CEREBRAS_API_KEY environment variable}"
 
 echo -e "${BLUE}🧪 Simple Cerebras Integration Test${NC}"
 echo "===================================="

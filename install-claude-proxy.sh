@@ -42,7 +42,7 @@ install_dependencies() {
         pip3 install -r requirements.txt
     else
         echo -e "${YELLOW}⚠️  requirements.txt not found, installing core dependencies${NC}"
-        pip3 install fastapi uvicorn[standard] requests redis
+        pip3 install fastapi 'uvicorn[standard]' requests redis
     fi
     
     echo -e "${GREEN}✅ Dependencies installed${NC}"
@@ -78,7 +78,9 @@ configure_vastai() {
     echo -e "${YELLOW}📡 Vast.ai Configuration${NC}"
     
     read -p "Vast.ai SSH host (e.g., ssh7.vast.ai): " VAST_SSH_HOST
+    : "${VAST_SSH_HOST:?Vast.ai SSH host is required}"
     read -p "Vast.ai SSH port (e.g., 12806): " VAST_SSH_PORT
+    : "${VAST_SSH_PORT:?Vast.ai SSH port is required}"
     read -p "Vast.ai SSH user (default: root): " VAST_USER
     VAST_USER=${VAST_USER:-root}
     

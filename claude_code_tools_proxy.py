@@ -14,8 +14,12 @@ import re
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-import urllib.request
-import urllib.parse
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 # Use system HTTP server - no external dependencies
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -51,7 +55,7 @@ class ClaudeCodeTools:
                 }
         
         try:
-            print(f"🔧 Executing bash: {command}")
+            logger.info(f"🔧 Executing bash: {command}")
             
             # Limit command length
             if len(command) > 1000:
@@ -164,14 +168,11 @@ class ClaudeCodeProxy(BaseHTTPRequestHandler):
     """HTTP request handler for Claude Code proxy"""
     
     tools = ClaudeCodeTools()
-    vast_api_url = "http://localhost:8000"
+    vast_api_url = os.environ.get('CLAUDE_BACKEND_URL', 'http://localhost:8000')
     
     def log_message(self, format, *args):
-        """Override to reduce logging noise - log to stderr with timestamp"""
-        if format and args:
-            timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-            message = format % args
-            sys.stderr.write(f"[{timestamp}] {message}\n")
+        """Override to use structured logging"""
+        logger.info(format, *args)
     
     def do_GET(self):
         """Handle GET requests"""
@@ -223,7 +224,7 @@ class ClaudeCodeProxy(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             request_data = json.loads(post_data.decode())
             
-            print(f"📨 Claude Code request: {len(request_data.get('messages', []))} messages")
+            logger.info(f"📨 Claude Code request: {len(request_data.get('messages', []))} messages")
             
             # Check if this is a tool call response
             messages = request_data.get('messages', [])
@@ -243,7 +244,7 @@ class ClaudeCodeProxy(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode())
             
         except Exception as e:
-            print(f"❌ Error handling request: {e}")
+            logger.error(f"❌ Error handling request: {e}")
             self.send_error(500)
     
     def has_tool_calls(self, messages: List[Dict]) -> bool:
@@ -326,15 +327,15 @@ class ClaudeCodeProxy(BaseHTTPRequestHandler):
             try:
                 with urllib.request.urlopen(req, timeout=60) as response:
                     response_data = response.read().decode()
-                    print(f"✅ Qwen response received ({len(response_data)} chars)")
+                    logger.info(f"✅ Qwen response received ({len(response_data)} chars)")
                     return json.loads(response_data)
             except urllib.error.HTTPError as e:
                 error_msg = e.read().decode() if hasattr(e, 'read') else str(e)
-                print(f"❌ HTTP Error {e.code}: {error_msg}")
+                logger.error(f"❌ HTTP Error {e.code}: {error_msg}")
                 raise
                 
         except Exception as e:
-            print(f"❌ Error forwarding to Qwen: {e}")
+            logger.error(f"❌ Error forwarding to Qwen: {e}")
             return {
                 "id": f"msg_{int(time.time())}",
                 "type": "message",
@@ -382,22 +383,22 @@ def main():
     """Start the Claude Code proxy server"""
     PORT = 8001
     
-    print("🚀 Starting Claude Code Tools Proxy")
-    print(f"📍 Port: {PORT}")
-    print(f"📡 Backend: http://localhost:8000")
-    print("🔧 Tools: bash, str_replace_editor")
-    print("")
-    print("To use with Claude Code CLI:")
-    print(f'export ANTHROPIC_BASE_URL="http://localhost:{PORT}"')
-    print('claude "Write a Python script and run it"')
-    print("")
+    logger.info("🚀 Starting Claude Code Tools Proxy")
+    logger.info(f"📍 Port: {PORT}")
+    logger.info(f"📡 Backend: http://localhost:8000")
+    logger.info("🔧 Tools: bash, str_replace_editor")
+    logger.info("")
+    logger.info("To use with Claude Code CLI:")
+    logger.info(f'export ANTHROPIC_BASE_URL="http://localhost:{PORT}"')
+    logger.info('claude "Write a Python script and run it"')
+    logger.info("")
     
     server = HTTPServer(('localhost', PORT), ClaudeCodeProxy)
     
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n🛑 Shutting down proxy server")
+        logger.info("\n🛑 Shutting down proxy server")
         server.shutdown()
 
 if __name__ == "__main__":

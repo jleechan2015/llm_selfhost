@@ -25,22 +25,23 @@ class ClaudeCodeTools:
     def bash(self, command: str) -> Dict[str, Any]:
         """Execute bash commands with security checks"""
         
-        # Security checks
-        dangerous_commands = [
-            'rm -rf /', 'rm -rf *', 'format', 'fdisk', 'mkfs',
-            'dd if=', ':(){ :|:& };:', 'chmod -r 777 /',
-            'chown -r', 'passwd', 'sudo su', 'su -',
-            'curl http://169.254.169.254'  # Block metadata access
+        # Enhanced security checks with regex patterns
+        dangerous_patterns = [
+            r'rm\s+-rf\s+/', r'rm\s+-rf\s+\*', r'\bformat\b', r'\bfdisk\b', r'\bmkfs\b',
+            r'dd\s+if=', r':\(\)\s*\{\s*:\|:&\s*\};:', r'chmod\s+-R\s+777\s+/',
+            r'chown\s+-R', r'\bpasswd\b', r'sudo\s+su', r'\bsu\s+-',
+            r'curl.*169\.254\.169\.254',  # Block metadata access
+            r'>\s*/dev/sd[a-z]',  # Block direct disk writes
+            r'mkfs\.',  # Block any mkfs variant
         ]
         
-        command_lower = command.lower()
-        for dangerous in dangerous_commands:
-            if dangerous in command_lower:
+        for pattern in dangerous_patterns:
+            if re.search(pattern, command, re.IGNORECASE):
                 return {
                     "type": "bash",
                     "exit_code": 1,
                     "stdout": "",
-                    "stderr": f"Security: Dangerous command blocked: {dangerous}"
+                    "stderr": f"Security: Command blocked by security policy"
                 }
         
         try:
@@ -86,11 +87,40 @@ class ClaudeCodeTools:
                 "stderr": str(e)
             }
     
+    def _validate_file_path(self, path: str) -> bool:
+        """Validate file path to prevent directory traversal"""
+        if not path:
+            return False
+        
+        # Resolve to absolute path
+        try:
+            abs_path = os.path.abspath(path)
+            # Ensure path is within current directory or allowed directories
+            cwd = os.getcwd()
+            if not abs_path.startswith(cwd):
+                return False
+            
+            # Block access to sensitive files
+            blocked_patterns = ['.ssh', '.git', '.env', 'id_rsa', 'id_dsa']
+            for pattern in blocked_patterns:
+                if pattern in abs_path:
+                    return False
+            
+            return True
+        except:
+            return False
+
     def str_replace_editor(self, command: str, path: str = None, file_text: str = None, 
                           new_str: str = None, old_str: str = None, insert_line: int = None,
                           view_range: List[int] = None) -> Dict[str, Any]:
         """File editing tool like Claude Code's str_replace_editor"""
         
+        if path and not self._validate_file_path(path):
+            return {
+                "type": "str_replace_editor",
+                "error": "Invalid file path: access denied"
+            }
+
         if command == "create":
             try:
                 with open(path, 'w') as f:
@@ -155,6 +185,11 @@ class ClaudeCodeTools:
 
     def write_file(self, path: str, content: str) -> Dict[str, Any]:
         """Direct file write tool for Claude Code CLI compatibility"""
+        if not self._validate_file_path(path):
+            return {
+                "type": "write_file",
+                "error": "Invalid file path: access denied"
+            }
         try:
             with open(path, 'w') as f:
                 f.write(content)

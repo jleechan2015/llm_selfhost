@@ -31,11 +31,21 @@ This test validates the complete claude-local → LM Studio integration pipeline
 
 ### Test Script
 ```bash
-#!/bin/bash
-# test_claude_local.sh - Automated test runner
+#!/usr/bin/env bash
++set -euo pipefail
++
++CLI_BIN="$(dirname "$0")/../claude-local"
 
-echo "🧪 Starting Claude-Local Integration Test"
+echo " Starting Claude-Local Integration Test"
 echo "========================================"
+
+# Test 1: Basic Connectivity
+echo " Testing claude-local connectivity..."
+if ! "${CLI_BIN}" --help >/dev/null 2>&1; then
+    echo "❌ claude-local command not working"
+    exit 1
+fi
+echo "✅ claude-local command available""
 
 # Test 1: Basic Connectivity
 echo "📡 Testing claude-local connectivity..."

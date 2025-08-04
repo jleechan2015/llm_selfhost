@@ -101,7 +101,7 @@ def call_llm_with_balancing(prompt):
 vastai show instances
 
 # Redis usage
-redis-cli -u "redis://default:cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl@redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com:14339" info memory
+redis-cli -u "redis://default:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}" info memory
 
 # Set spending alerts
 vastai set billing-limit 50  # $50/day limit
@@ -131,7 +131,7 @@ import redis
 r = redis.Redis(
     host='redis-14339.c13.us-east-1-3.ec2.redns.redis-cloud.com',
     port=14339,
-    password='cIBOVXrPphWKLsWwz46Ylb38wEFXNcRl',
+    password=os.getenv('REDIS_PASSWORD'),
     ssl=True
 )
 print(r.ping())

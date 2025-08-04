@@ -46,8 +46,6 @@ start_tunnel() {
     
     # Start new tunnel in background
     nohup ssh -N -L ${LOCAL_PORT}:localhost:${VAST_PORT} \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
         -o ServerAliveInterval=30 \
         -o ServerAliveCountMax=3 \
         -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} \
@@ -75,7 +73,7 @@ check_remote_server() {
     echo -e "${BLUE}🔍 Checking if server is running on vast.ai...${NC}"
     
     # Check if we can SSH into the instance
-    if ! ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    if ! ssh -o ConnectTimeout=10 \
          -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} "echo 'SSH OK'" >/dev/null 2>&1; then
         echo -e "${RED}❌ Cannot SSH to vast.ai instance${NC}"
         echo -e "${YELLOW}💡 Check if instance is running and SSH details are correct${NC}"
@@ -83,7 +81,11 @@ check_remote_server() {
     fi
     
     # Check if proxy server is running on the remote instance
-    REMOTE_STATUS=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    if ! [[ "$VAST_PORT" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}❌ Invalid VAST_PORT: must be numeric${NC}"
+        return 1
+    fi
+    REMOTE_STATUS=$(ssh -o ConnectTimeout=10 \
                    -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} \
                    "curl -s http://localhost:${VAST_PORT}/health 2>/dev/null" 2>/dev/null)
     
@@ -101,7 +103,7 @@ start_remote_server() {
     echo -e "${BLUE}🚀 Starting server on vast.ai instance...${NC}"
     
     # Check if startup script exists
-    STARTUP_CHECK=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    STARTUP_CHECK=$(ssh -o ConnectTimeout=10 \
                    -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} \
                    "ls -la startup_llm.sh vast_tools_proxy.py claude_tools_base.py 2>/dev/null" 2>/dev/null)
     
@@ -110,7 +112,7 @@ start_remote_server() {
         echo -e "${BLUE}📤 Deploying tool-enabled proxy scripts...${NC}"
         
         # Copy essential files to remote instance (including tools-enabled proxy)
-        scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        scp \
             -P ${VAST_SSH_PORT} startup_llm.sh vast_tools_proxy.py claude_tools_base.py requirements.txt \
             ${VAST_USER}@${VAST_SSH_HOST}:~/ 2>/dev/null
         
@@ -122,7 +124,7 @@ start_remote_server() {
     
     # Start the server
     echo -e "${BLUE}⏳ Starting proxy server (this may take 2-3 minutes)...${NC}"
-    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    ssh -o ConnectTimeout=10 \
         -p ${VAST_SSH_PORT} ${VAST_USER}@${VAST_SSH_HOST} \
         "chmod +x startup_llm.sh && nohup ./startup_llm.sh > server.log 2>&1 &" 2>/dev/null
     

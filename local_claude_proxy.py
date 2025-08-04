@@ -65,8 +65,10 @@ async def create_message(request: Request):
         else:
             raise HTTPException(status_code=response.status_code, detail=response.text)
             
+    except requests.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Request to vast.ai backend failed: {str(e)}") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}") from e
 
 if __name__ == "__main__":
     print(f"🚀 Starting Claude Code Proxy on port {LOCAL_PORT}")

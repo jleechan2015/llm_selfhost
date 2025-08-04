@@ -12,7 +12,11 @@ This project provides proxies that let you use Claude Code CLI with:
 **One-command installation:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jleechanorg/claude_llm_proxy/main/install-claude-proxy.sh | bash
+# Download installer and verify SHA256 checksum
+curl -fsSL -o install-claude-proxy.sh \
+  https://raw.githubusercontent.com/jleechanorg/claude_llm_proxy/main/install-claude-proxy.sh
+echo "EXPECTED_SHA256  install-claude-proxy.sh" | sha256sum --check -
+bash install-claude-proxy.sh
 ```
 
 Or clone and run:
