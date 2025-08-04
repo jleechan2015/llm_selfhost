@@ -61,3 +61,11 @@ Thumbs.db
 
 # Test outputs
 *.log
+
+# Claude Code CLI generated files
+hello_interactive.py
+datetime.txt
+interactive_test.txt
+test_output.txt
+*.py.tmp
+*.sh.tmp
